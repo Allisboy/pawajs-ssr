@@ -152,10 +152,7 @@ export const ComponentProps=(some,message,name)=>{
 
 
 
-git commit -m "Initial commit"
 
-# Step 4: Add the remote repo (replace with your repo URL)
-git remote add origin https://github.com/Allisboy/pawajs-ssr.git
 
-# Step 5: Push to GitHub (main branch)
-git push -u origin main
+
+
