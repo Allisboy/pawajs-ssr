@@ -1,0 +1,25 @@
+{
+  "name": "pawa-ssr",
+  "version": "1.0.0",
+  "description": "pawajs ssr libary",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Allisboy/pawajs-ssr.git"
+  },
+  "keywords": [
+    "ssr",
+    "html",
+    "js",
+    "pawajs"
+  ],
+  "author": "Allwell Oriso-owubo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Allisboy/pawajs-ssr/issues"
+  },
+  "homepage": "https://github.com/Allisboy/pawajs-ssr#readme"
+}
