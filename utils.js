@@ -144,15 +144,3 @@ export const ComponentProps=(some,message,name)=>{
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
