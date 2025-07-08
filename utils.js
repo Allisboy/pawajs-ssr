@@ -1,4 +1,4 @@
-import safeEval from 'safe-eval'
+import {VM} from 'vm2'
 export const splitAndAdd=(string) => {
     const strings=string.split('-')
    let newString=''
@@ -40,20 +40,25 @@ export const sanitizeTemplate = (temp) => {
   return temp.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
 };
 /**
- * Safely evaluates a JavaScript expression with context.
- * 
- * @param {string} expr - The JavaScript expression to evaluate.
- * @param {object} context - The variables available in the expression.
- * @returns {any} The evaluated result or false if it fails.
+ * Safely evaluates a JavaScript expression in a sandbox.
+ *
+ * @param {string} expr - The expression to evaluate.
+ * @param {object} context - The context to expose inside the sandbox.
+ * @returns {any} - The result of the evaluated expression or null on error.
  */
 export const evaluateExpr = (expr, context = {}) => {
   try {
-    return safeEval(expr, context)
-  } catch (e) {
-    console.warn(`safe-eval failed: "${expr}" ->`, e.message)
-    return false
+    const vm = new VM({
+      timeout: 50,
+      sandbox: { ...context }
+    });
+
+    return vm.run(expr);
+  } catch (err) {
+    console.warn(`Evaluation failed for: ${expr}`, err.message);
+    return null;
   }
-}
+};
 export const propsValidator=(obj={},propsAttri,name)=>{
   let newObj={}
   
@@ -143,4 +148,3 @@ export const ComponentProps=(some,message,name)=>{
 })
 
 }
-

@@ -7,8 +7,8 @@ import { sanitizeTemplate,propsValidator, evaluateExpr } from './utils.js';
 /**
  * @type{null|{_formerContext:stateContext,_hasRun:boolean,_prop:object,_name:string,_insert:object,_transportContext}}
  */
-export let stateContext=null;
-let formerContext=null;
+// export let stateContext=null;
+// let formerContext=null;
 export const components=new Map()
 
 
@@ -20,61 +20,11 @@ export const $state=(arg)=>{
 }
 
 // under consideration
- const setContext=() => {
-  if (stateContext) {
-    console.warn('setContext not meant to be in a component but outside')
-    return null
-  }
-    const id = crypto.randomUUID()
-    
-    const setValue= (val={}) => {
-      if (stateContext._hasRun) {
-        return
-      }
-      if (!stateContext) {
-        console.warn('set Context value must be inside of a component')
-  return null
-}
-if (!stateContext._transportContext) {
-  stateContext._transportContext={}
-}
-      stateContext._transportContext[id]=val
-    }
-    return {
-      id,
-      setValue
-    }
-    
-}
-
-/**
- * Get parent Context
- * @param {object} context
- * @return {object}
- */
-//under consideration
-const useContext=(context) => {
-    if (!stateContext) {
-       console.warn('getContext must be called inside of a component')
-  return
-}
-if (stateContext?._transportContext[context.id]) {
-  return stateContext._transportContext[context.id]
-} else {
-  console.warn('this component not in the context tree')
-}
-}
-let pawaContext={}
+ 
 /**
  * @type{string}
  */
 export const allServerAttr=['server-if','server-else','server-else-if','server-for']
-export const useInsert=(arg={})=>{
-    if (stateContext.isPage) {
-        Object.assign(stateContext.context,arg)
-    }
-}
- 
 
 export const RegisterComponent=(...arg)=>{
    
@@ -168,35 +118,6 @@ export const PluginSystem=(...func)=>{
 }
 
 
-
-/**
- * 
- * @param {PawaComponent} context 
- */
-export const setStateContext=(context)=>{
-    let former=stateContext
-    stateContext=context
-    stateContext._formerContext=former
-    if(former){
-      stateContext._transportContext=former?._transportContext
-    }
-    return stateContext
-}
-
-/**
- * 
- * @param {object} props 
- * @returns {object}
- */
-export const useValidateProps=(props={}) => {
-  if (!stateContext) {
-    console.warn('must be used inside of a component')
-    return
-  }
-    
-    return propsValidator(props,stateContext._prop,stateContext._name)
-}
-
 /**
  * 
  * @param {PawaElement|HTMLElement} el 
@@ -209,6 +130,7 @@ const component=(el)=>{
    try {
     const slot=el._slots
     const slots={}
+    let stateContext=null
     Array.from(slot.children).forEach(prop =>{
       if (prop.getAttribute('prop')) {
         slots[prop.getAttribute('prop')]=prop.innerHTML
@@ -217,9 +139,26 @@ const component=(el)=>{
       }
     }) 
     const children=el._componentChildren
+    const component =el._component
+    stateContext=component
     const insert=(arg={})=>{
             Object.assign(stateContext.context,arg)
     }
+    /**
+ * 
+ * @param {object} props 
+ * @returns {object}
+ */
+stateContext._prop={children,...el._props}
+stateContext._name=el._componentName
+ const useValidateProps=(props={}) => {
+  if (!stateContext) {
+    console.warn('must be used inside of a component')
+    return
+  }
+    
+    return propsValidator(props,stateContext._prop,stateContext._name)
+}
     const app = {
         children,
         app:{
@@ -237,13 +176,8 @@ const component=(el)=>{
             }
           } 
       const {document}=parseHTML()
-      const component =el._component
-      
-    setStateContext(component)
     const comment=document.createComment('componet')
     el.replaceWith(comment)
-    stateContext._prop={children,...el._props}
-    stateContext._name=el._componentName
     const div=document.createElement('div')
     let compo 
     try{
@@ -279,14 +213,7 @@ const component=(el)=>{
         render(newElement,el._context)
       }
         comment.remove()
-      
-    const former=stateContext._formerContext
-    stateContext=former
-    if (stateContext._transportContext) {
-      let contextId = stateContext._transportContext
-      delete pawaContext[contextId]
-    }
-   } catch (error) {
+         } catch (error) {
     console.log(error.message,error.stack);
     
    }

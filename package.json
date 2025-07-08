@@ -24,6 +24,6 @@
   "homepage": "https://github.com/Allisboy/pawajs-ssr#readme",
   "dependencies": {
     "linkedom": "^0.18.11",
-    "safe-eval": "^0.4.1"
+    "vm2": "^3.9.19"
   }
 }
