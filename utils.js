@@ -50,7 +50,8 @@ export const evaluateExpr = (expr, context = {}) => {
   try {
     const vm = new VM({
       timeout: 50,
-      sandbox: { ...context }
+      sandbox: { ...context },
+      require:false
     });
 
     return vm.run(expr);

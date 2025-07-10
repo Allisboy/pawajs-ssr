@@ -1,18 +1,7 @@
 import { render } from "./index.js";
-import { convertToNumber } from "./utils.js";
+import { convertToNumber,evaluateExpr } from "./utils.js";
 
-const evaluateExpr = (expr, context = {}) => {
-  const keys = Object.keys(context);
-  const resolvePath = (path, obj) =>
-    path.split('.').reduce((acc, key) => acc?.[key], obj);
-  const values = keys.map(key => resolvePath(key, context));
-  try {
-    return new Function(...keys, `try{return ${expr}}catch(e){console.log(e.message)}`)(...values);
-  } catch (e) {
-    console.warn(`Evaluation failed: ${expr}`, e.message);
-    return false;
-  }
-};
+
 
 export const If = (el, attr) => {
   if (el._running) return;

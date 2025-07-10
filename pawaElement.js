@@ -63,6 +63,10 @@ class PawaElement {
             }
           })
           this._componentChildren=this._el.innerHTML
+        }else{
+          if(this._el.getAttribute('client')){
+            this._el.removeAttribute('client')
+          }
         }
       }
 
