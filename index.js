@@ -43,10 +43,17 @@ const compoAfterCall=new Set()
 const renderBeforePawa=new Set()
 const renderAfterPawa=new Set()
 const renderBeforeChild=new Set()
-const attrPlugin=new Set()
+const startsWithSet=new Set()
+const fullNamePlugin=new Set()
+const externalPlugin={}
+let pawaAttributes=new Set()
+
+/**
+ * @typedef {{startsWith:string,fullName:string,plugin:(el:HTMLElement | PawaElement,attr:object)=>void}} AttriPlugin
+ */
 /**
  * @typedef {{
- * attribute?:{register:Array<string>,plugin:(el:HTMLElement,attr:object)=>void},
+ * attribute?:{register:Array<AttriPlugin>},
  * component?:{
  * beforeCall?:(stateContext:PawaComponent,app:object)=>void,
  * afterCall?:(stateContext:PawaComponent,el:HTMLElement)=>void
@@ -66,34 +73,37 @@ export const PluginSystem=(...func)=>{
     /**
      * @type {PluginObject}
      */
+    if (typeof fn !== 'function') {
+      console.warn('plugin must be a function that returns the plugin objects')
+      return
+    }
     const getPlugin=fn()
     // attributes plugin or extension
+    
     if (getPlugin?.attribute) {
-      const attr=getPlugin.attribute
-      if(attr.register === null){
-        console.error('attribute register must be giving is an array of attributes to add into pawajs attribute rendering')
-      }
-      if(Array.isArray(attr.register)){
-        attr.register.forEach(attr=>{
-          if(pawaAttributes.has(attr)){
-            console.warn('attribute already exist in pawajs Attributes',attr)
-            throw Error('attribute already exist ',attr)
-          }else{
-            pawaAttributes.add(attr)
-          }
-        })
-      }else{
-        console.warn('pawa attribute plugin register must be an array')
-      }
-      if(attr.plugin === null){
-        console.error('attribute plugin function must be giving, is a function of attributes to run the plugin pawajs attribute rendering')
-      }else{
-        if(attr.plugin instanceof Function){
-          attrPlugin.add(attr.plugin)
+      getPlugin.attribute.register.forEach(attrPlugins =>{
+        if (attrPlugins.fullName && attrPlugins.startsWith) {
+          console.warn('Either Plugins FullName or startsWith. you are not required to use to of does plugin registers at this same entry.')
+          return
         }
-      }
-      
-
+        if (attrPlugins?.fullName) {
+          if (pawaAttributes.has(attrPlugins.fullName) ) {
+            console.warn(`attribute plugin already exist ${attrPlugins.fullName}`)
+            return
+          }
+          pawaAttributes.add(attrPlugins.fullName)
+        fullNamePlugin.add(attrPlugins.fullName)
+        externalPlugin[attrPlugins.fullName]=attrPlugins?.plugin
+        }else if (attrPlugins?.startsWith) {
+          if (pawaAttributes.has(attrPlugins.startsWith) ) {
+          console.warn(`attribute plugin already exist ${attrPlugins.startsWith}`)
+          return
+        }
+        pawaAttributes.add(attrPlugins.startsWith)
+        startsWithSet.add(attrPlugins.startsWith)
+        externalPlugin[attrPlugins.startsWith]=attrPlugins?.plugin
+        }
+      })
     }
     if (getPlugin?.component) {
       if (getPlugin.component?.beforeCall && typeof getPlugin.component?.beforeCall === 'function') {
@@ -394,6 +404,18 @@ export const render=(el,contexts={})=>{
      if(el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@('))){
         textContentHandler(el)  
      }
+     let startAttribute=false
+   const startObject={}
+   //get startsWith plugin
+   startsWithSet.forEach( starts=>{
+    
+    el._attributes.forEach(attr =>{
+      if(attr.name.startsWith('on:')){
+        startAttribute=true
+        startObject[attr.name]=starts
+      }
+    })
+   })
      for (const fn of renderAfterPawa) {
       try {
         fn(el)
@@ -406,11 +428,34 @@ export const render=(el,contexts={})=>{
             directives[attr.name](el,attr)  
         }else if(attr.value.includes('@(')){
             attributeHandler(el,attr)
-        }else {
-          attrPlugin.forEach((plugins) => {
-            plugins(el,attr)
-          })
+        }else if(fullNamePlugin.has(attr.name)) {
+        if(externalPlugin[attr.name]){
+          const plugin= externalPlugin[attr.name]
+          try{
+            if (typeof plugin !== 'function') {
+              console.warn(`${attr.name} plugin must be a function`)
+              return
+            }
+            plugin(el,attr)
+          }catch(error){
+            console.warn(error.message,error.stack)
+          }
         }
+      }else if(startAttribute){
+        const name=startObject[attr.name]
+        if(externalPlugin[name]){
+          const plugin= externalPlugin[name]
+          try{
+            if (typeof plugin !== 'function') {
+              console.warn(`${name} plugin must be a function`)
+              return
+            }
+            plugin(el,attr)
+          }catch(error){
+            console.warn(error.message,error.stack)
+          }
+        }
+      }
         
     })
     if (el._componentName) {

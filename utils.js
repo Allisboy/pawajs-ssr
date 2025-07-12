@@ -149,3 +149,10 @@ export const ComponentProps=(some,message,name)=>{
 })
 
 }
+
+
+export const replaceTemplateOperators = (expression) => {
+  return expression
+    .replace(/\/\*/g, '`')
+    .replace(/\*\//g, '`'); // Also replace closing */ with backtick if needed
+};

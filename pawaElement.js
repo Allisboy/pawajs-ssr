@@ -1,7 +1,7 @@
 import { HTMLElement, parseHTML } from "linkedom"
 import { allServerAttr, components } from "./index.js"
 import PawaComponent from "./pawaComponent.js"
-import { evaluateExpr, splitAndAdd } from "./utils.js"
+import { evaluateExpr, splitAndAdd,replaceTemplateOperators } from "./utils.js"
 
 class PawaElement {
   /**
@@ -88,7 +88,7 @@ class PawaElement {
                 
               } else {
                 try {
-                  const func = evaluateExpr(attr.value,this._context)
+                  const func = evaluateExpr(replaceTemplateOperators(attr.value),this._context)
                 const name=attr.name
                 this._props[name]=func
                 } catch (error) {
