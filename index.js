@@ -149,17 +149,20 @@ const component=(el)=>{
       }
     }) 
     const children=el._componentChildren
+    /**
+     * @type{import('./pawaComponent.js').default}
+     */
     const component =el._component
     stateContext=component
     const insert=(arg={})=>{
-            Object.assign(stateContext.context,arg)
+            Object.assign(stateContext._insert,arg)
     }
     /**
  * 
  * @param {object} props 
  * @returns {object}
  */
-stateContext._prop={children,...el._props}
+stateContext._prop={children,...el._props,...slots}
 stateContext._name=el._componentName
  const useValidateProps=(props={}) => {
   if (!stateContext) {
@@ -193,7 +196,7 @@ stateContext._name=el._componentName
     try{
       compo=sanitizeTemplate(component.component(app))
     }catch(error){
-      console.error(error.message,error.stack)
+      console.error(`error from ${stateContext._name}`,error.message,error.stack)
     }
     if (component?._insert) {
         Object.assign(el._context,component._insert)
@@ -255,7 +258,8 @@ const textContentHandler=(el)=>{
             
           });
         } catch (error) {
-          console.warn(`error at ${el} textcontent`)
+          console.warn(`error at ${el._template} textcontent`)
+          console.error(error.message,error.stack)
         }
       };
       evaluate()

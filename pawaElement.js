@@ -18,6 +18,7 @@ class PawaElement {
         this._slots=document.createDocumentFragment()
         this._context=context
         this._props={}
+        this._template=element.outerHTML
         this._component=null
         this._componentName=''
         this._running=false
