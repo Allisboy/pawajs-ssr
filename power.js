@@ -77,7 +77,8 @@ export const For=(el,attr)=>{
       return
     }
     el._running=true
-    const value=attr.value
+    try {
+      const value=attr.value
     const split=value.split(' in ')
     const arrayName=split[1]
     const arrayItems=split[0].split(',')
@@ -88,10 +89,11 @@ export const For=(el,attr)=>{
       array.forEach((item,index)=>{
         const context=el._context
         const itemContext = {
-          [arrayItem]: item,
           [indexes]: index,
           ...context
         }
+        itemContext[arrayItem]=item
+        console.log(itemContext,arrayItem,item,array)
         const newElement=el.cloneNode(true)
         newElement.removeAttribute('server-for')
         newElement.setAttribute('s-data-for',convertToNumber(attr.value))
@@ -105,4 +107,7 @@ export const For=(el,attr)=>{
       })
     }
     el.remove()
+    } catch (error) {
+      console.error(error.message,error.stack)
+    }
 }
