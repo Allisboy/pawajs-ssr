@@ -93,7 +93,6 @@ export const For=(el,attr)=>{
           ...context
         }
         itemContext[arrayItem]=item
-        console.log(itemContext,arrayItem,item,array)
         const newElement=el.cloneNode(true)
         newElement.removeAttribute('server-for')
         newElement.setAttribute('s-data-for',convertToNumber(attr.value))
