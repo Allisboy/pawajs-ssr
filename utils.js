@@ -49,7 +49,7 @@ export const sanitizeTemplate = (temp) => {
 export const evaluateExpr = (expr, context = {}) => {
   try {
     const vm = new VM({
-      timeout: 50,
+      timeout: 150,
       sandbox: { ...context },
       require:false
     });
