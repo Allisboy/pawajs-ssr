@@ -26,17 +26,33 @@ export const $state=(arg)=>{
  */
 export const allServerAttr=['server-if','server-else','server-else-if','server-for']
 
-export const RegisterComponent=(...arg)=>{
-   
-    arg.forEach(func=>{
-        if (typeof func === 'function') {
-            components.set(func.name.toUpperCase(),func)
-        }else{
-            console.warn('must be a function')
-        }
-    })
-   
-}
+export const RegisterComponent = (...args) => {
+  // Handle new signature from plugin: RegisterComponent('Name1', Func1, 'Name2', Func2, ...)
+  if (typeof args[0] === 'string') {
+    for (let i = 0; i < args.length; i += 2) {
+      const name = args[i];
+      const component = args[i + 1];
+      if (typeof name === 'string' && typeof component === 'function') {
+        if (components.has(name.toUpperCase())) continue;
+        components.set(name.toUpperCase(), component);
+      } else {
+        console.warn('Mismatched arguments for RegisterComponent. Expected pairs of (string, function).');
+        break;
+      }
+    }
+    return;
+  }
+
+  // Handle old signature for dev mode: RegisterComponent(ComponentFunc1, ComponentFunc2, ...)
+  args.forEach((component) => {
+    if (typeof component === 'function' && component.name) {
+      if (components.has(component.name.toUpperCase())) return;
+      components.set(component.name.toUpperCase(), component);
+    } else {
+       console.warn('Component registration failed: Component must be a named function. This might happen in production builds without the pawajs Vite plugin.');
+    }
+  });
+};
 
 const compoBeforeCall = new Set()
 const compoAfterCall=new Set()

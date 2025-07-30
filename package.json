@@ -1,6 +1,6 @@
 {
   "name": "pawa-ssr",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "pawajs ssr libary",
   "main": "index.js",
   "scripts": {
@@ -23,7 +23,6 @@
   },
   "homepage": "https://github.com/Allisboy/pawajs-ssr#readme",
   "dependencies": {
-    "linkedom": "^0.18.11",
-    "vm2": "^3.9.19"
+    "linkedom": "^0.18.11"
   }
 }

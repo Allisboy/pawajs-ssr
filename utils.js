@@ -1,4 +1,4 @@
-import {VM} from 'vm2'
+
 export const splitAndAdd=(string) => {
     const strings=string.split('-')
    let newString=''
@@ -48,15 +48,16 @@ export const sanitizeTemplate = (temp) => {
  */
 export const evaluateExpr = (expr, context = {}) => {
   try {
-    const vm = new VM({
-      timeout: 150,
-      sandbox: { ...context },
-      require:false
-    });
-
-    return vm.run(expr);
+    const keys = Object.keys(context);
+    const resolvePath = (path, obj) => {
+    return path.split('.').reduce((acc, key) => acc?.[key], obj);
+};
+const values = keys.map((key) => resolvePath(key, context));
+    return new Function(...keys,`
+      const require=null
+      return ${expr}`)(...values)
   } catch (err) {
-    console.warn(`Evaluation failed for: ${expr}`, err.message);
+    console.error(`Evaluation failed for: ${expr}`, err.message,err.stack);
     return null;
   }
 };
