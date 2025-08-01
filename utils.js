@@ -1,14 +1,14 @@
 
-export const splitAndAdd=(string) => {
+exports.splitAndAdd=(string) => {
     const strings=string.split('-')
    let newString=''
    strings.forEach(str=>{
      newString+=str
    })
    return newString.toUpperCase()
- }
+}
 
- export const matchRoute = (pattern, path) => {
+exports.matchRoute = (pattern, path) => {
   // Remove trailing slashes for consistency
   const cleanPattern = pattern.replace(/\/$/, '');
   const cleanPath = path.replace(/\/$/, '');
@@ -34,8 +34,8 @@ export const splitAndAdd=(string) => {
   });
   
   return [match, params];
-}
-export const sanitizeTemplate = (temp) => {
+};
+exports.sanitizeTemplate = (temp) => {
   if (typeof temp !== 'string') return '';
   return temp.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
 };
@@ -46,7 +46,7 @@ export const sanitizeTemplate = (temp) => {
  * @param {object} context - The context to expose inside the sandbox.
  * @returns {any} - The result of the evaluated expression or null on error.
  */
-export const evaluateExpr = (expr, context = {}) => {
+exports.evaluateExpr = (expr, context = {}) => {
   try {
     const keys = Object.keys(context);
     const resolvePath = (path, obj) => {
@@ -87,16 +87,16 @@ export const propsValidator=(obj={},propsAttri,name)=>{
     }
   }
   return {...propsAttri}
-}
+};
 
-export const convertToNumber=(str)=>{
+exports.convertToNumber=(str)=>{
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash=(hash * 31 + str.charCodeAt(i)) | 0
   }
   return hash
-}
-export const ComponentProps=(some,message,name)=>{
+};
+exports.ComponentProps=(some,message,name)=>{
 
   return({
   Array:()=>{
@@ -149,10 +149,10 @@ export const ComponentProps=(some,message,name)=>{
   },
 })
 
-}
+};
 
 
-export const replaceTemplateOperators = (expression) => {
+exports.replaceTemplateOperators = (expression) => {
   return expression
     .replace(/\/\*/g, '`')
     .replace(/\*\//g, '`'); // Also replace closing */ with backtick if needed

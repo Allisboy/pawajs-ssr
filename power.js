@@ -1,9 +1,7 @@
 const {render} = require("./index.js");
 const { convertToNumber,evaluateExpr } = require("./utils.js");
 
-
-
-export const If = (el, attr) => {
+exports.If = (el, attr) => {
   if (el._running) return;
   el._running = true;
 
@@ -25,7 +23,7 @@ export const If = (el, attr) => {
   }
 };
 
-export const Else = (el, attr) => {
+exports.Else = (el, attr) => {
   if (el._running) return;
   el._running = true;
 
@@ -43,7 +41,7 @@ export const Else = (el, attr) => {
   }
 };
 
-export const ElseIf = (el, attr) => {
+exports.ElseIf = (el, attr) => {
   if (el._running) return;
   el._running = true;
 
@@ -72,7 +70,7 @@ export const ElseIf = (el, attr) => {
   }
 };
 
-export const For=(el,attr)=>{
+exports.For=(el,attr)=>{
     if(el._running){
       return
     }

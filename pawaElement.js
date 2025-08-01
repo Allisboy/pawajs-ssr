@@ -101,4 +101,4 @@ class PawaElement {
         }
       }
 }
-export default PawaElement
+module.exports = PawaElement

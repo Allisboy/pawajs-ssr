@@ -13,12 +13,11 @@ export const components=new Map()
 
 
 
-export const $state=(arg)=>{
+exports.$state=(arg)=>{
     return {
         value:arg
     }
 }
-
 // under consideration
  
 /**
@@ -26,7 +25,7 @@ export const $state=(arg)=>{
  */
 export const allServerAttr=['server-if','server-else','server-else-if','server-for']
 
-export const RegisterComponent = (...args) => {
+exports.RegisterComponent = (...args) => {
   // Handle new signature from plugin: RegisterComponent('Name1', Func1, 'Name2', Func2, ...)
   if (typeof args[0] === 'string') {
     for (let i = 0; i < args.length; i += 2) {
@@ -85,7 +84,7 @@ let pawaAttributes=new Set()
  * @param {Array<()=>PluginObject>} func
  */
 export const PluginSystem=(...func)=>{
-  func.forEach(fn=>{
+  func.forEach(fn=>{ 
     /**
      * @type {PluginObject}
      */
@@ -407,7 +406,7 @@ const directives={
  * @param {PawaElement | HTMLElement} el 
  * @param {object} contexts 
  */
-export const render=(el,contexts={})=>{
+exports.render=(el,contexts={})=>{
     const context={
         ...contexts
     }
@@ -496,7 +495,7 @@ export const render=(el,contexts={})=>{
     }
 }
 
-export const startApp=(html,context={})=>{
+exports.startApp=(html,context={})=>{
     const app=new DOMParser()
     const {document}=parseHTML()
    const body= app.parseFromString(html,'text/html')
