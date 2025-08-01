@@ -1,7 +1,7 @@
-import { HTMLElement, parseHTML } from "linkedom"
-import { allServerAttr, components } from "./index.js"
-import PawaComponent from "./pawaComponent.js"
-import { evaluateExpr, splitAndAdd,replaceTemplateOperators } from "./utils.js"
+const { HTMLElement, parseHTML } = require("linkedom")
+const { allServerAttr, components } =require("./index.js")
+const PawaComponent =require("./pawaComponent.js")
+const { evaluateExpr, splitAndAdd,replaceTemplateOperators } =require("./utils.js")
 
 class PawaElement {
   /**

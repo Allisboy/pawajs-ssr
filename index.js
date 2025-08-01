@@ -1,8 +1,8 @@
-import {Attr, DOMParser,parseHTML,Node, HTMLElement} from 'linkedom'
-import PawaElement from './pawaElement.js'
-import { If,Else,ElseIf,For } from './power.js';
-import PawaComponent from './pawaComponent.js';
-import { sanitizeTemplate,propsValidator, evaluateExpr } from './utils.js';
+const { DOMParser,parseHTML, HTMLElement} =require('linkedom')
+const PawaElement = require('./pawaElement.js')
+const { If,Else,ElseIf,For } = require('./power.js');
+const PawaComponent = require('./pawaComponent.js')
+const { sanitizeTemplate,propsValidator, evaluateExpr } = require('./utils.js');
 
 /**
  * @type{null|{_formerContext:stateContext,_hasRun:boolean,_prop:object,_name:string,_insert:object,_transportContext}}

@@ -1,5 +1,5 @@
-import { render } from "./index.js";
-import { convertToNumber,evaluateExpr } from "./utils.js";
+const {render} = require("./index.js");
+const { convertToNumber,evaluateExpr } = require("./utils.js");
 
 
 
