@@ -1,7 +1,8 @@
 const { HTMLElement, parseHTML } = require("linkedom")
-const { allServerAttr, components } =require("./index.js")
-const PawaComponent =require("./pawaComponent.js")
+const { getAllServerAttrArray, getPawaComponentsMap } =require("./index.js")
+const PawaComponent = require("./pawaComponent.js")
 const { evaluateExpr, splitAndAdd,replaceTemplateOperators } =require("./utils.js")
+
 
 class PawaElement {
   /**
@@ -45,7 +46,7 @@ class PawaElement {
         return el   
     }
     hasForOrIf(){
-        if (this._el.getAttribute('server-if') || this._el.getAttribute('server-for') || this._el.getAttribute('server-else') || this._el.getAttribute('server-else-if')) {
+        if (this._el.getAttribute('s-if') || this._el.getAttribute('s-for') || this._el.getAttribute('s-else') || this._el.getAttribute('s-else-if')) {
           return true
         }else{
           return false
@@ -53,6 +54,7 @@ class PawaElement {
       }
       
       getComponent(){
+       const components=getPawaComponentsMap()
         if (components.has(splitAndAdd(this._el.tagName.toUpperCase())) && this._el.getAttribute('client') === null) {
           this._componentName=splitAndAdd(this._el.tagName.toUpperCase())
           this._component=new PawaComponent(components.get(splitAndAdd(this._el.tagName.toUpperCase())))
@@ -74,7 +76,7 @@ class PawaElement {
       //set Component props
       setProps(){
         if (this._componentName) {
-        
+         const allServerAttr=getAllServerAttrArray()
           this._el.attributes.forEach(attr=>{
             if(!allServerAttr.includes(attr.name)){
               if (attr.name.startsWith('-') || attr.name.startsWith('r-')) {
@@ -89,7 +91,7 @@ class PawaElement {
                 
               } else {
                 try {
-                  const func = evaluateExpr(replaceTemplateOperators(attr.value),this._context)
+                  const func = evaluateExpr(replaceTemplateOperators(attr.value),this._context,`setting props at ${attr.name} - ${attr.value} : ${this._template}`)
                 const name=attr.name
                 this._props[name]=func
                 } catch (error) {

@@ -1,17 +1,3 @@
-# pawajs-ssr 
-pawajs ssr (server side rendering) for javascript
-
-# Directives
-server-for, server-if,server-else,server-else-if
-
-```html
-<div s-if="user.value.name">
-    <h1>@(user.value.name)</h1>
-</div>
-```
-* or
-#javascript
-```javascript
 const pawa=require('../index.js')
 
 const component=({app})=>{
@@ -40,5 +26,4 @@ const html=()=>{
     `
 }
 const newHtml=pawa.startApp(html())
-```
-* Notice pawajs ssr uses @() instead of @{} and pawajs ssr doesn't use client's hooks
+console.log(newHtml.toString())

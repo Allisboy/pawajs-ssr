@@ -44,9 +44,10 @@ exports.sanitizeTemplate = (temp) => {
  *
  * @param {string} expr - The expression to evaluate.
  * @param {object} context - The context to expose inside the sandbox.
+ * @param {string} error - pass in error message 
  * @returns {any} - The result of the evaluated expression or null on error.
  */
-exports.evaluateExpr = (expr, context = {}) => {
+exports.evaluateExpr = (expr, context = {},error) => {
   try {
     const keys = Object.keys(context);
     const resolvePath = (path, obj) => {
@@ -57,11 +58,11 @@ const values = keys.map((key) => resolvePath(key, context));
       const require=null
       return ${expr}`)(...values)
   } catch (err) {
-    console.error(`Evaluation failed for: ${expr}`, err.message,err.stack);
+    console.error(`Evaluation failed for: ${expr}`,error,err.message,err.stack);
     return null;
   }
 };
-export const propsValidator=(obj={},propsAttri,name)=>{
+exports.propsValidator=(obj={},propsAttri,name)=>{
   let newObj={}
   
   const jsTypes=['Array','String','Number']

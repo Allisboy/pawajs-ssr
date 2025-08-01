@@ -1,31 +1,34 @@
 const { DOMParser,parseHTML, HTMLElement} =require('linkedom')
-const PawaElement = require('./pawaElement.js')
-const { If,Else,ElseIf,For } = require('./power.js');
 const PawaComponent = require('./pawaComponent.js')
 const { sanitizeTemplate,propsValidator, evaluateExpr } = require('./utils.js');
 
 /**
  * @type{null|{_formerContext:stateContext,_hasRun:boolean,_prop:object,_name:string,_insert:object,_transportContext}}
- */
-// export let stateContext=null;
-// let formerContext=null;
-export const components=new Map()
+ */ 
 
-
-
-exports.$state=(arg)=>{
-    return {
-        value:arg
-    }
+const components = new Map();
+exports.getPawaComponentsMap =()=>{
+  return components ;
 }
+
+
+const $state = (arg) => {
+    return {
+        value: arg
+    };
+};
+exports.$state=$state
 // under consideration
  
 /**
  * @type{string}
  */
-export const allServerAttr=['server-if','server-else','server-else-if','server-for']
-
-exports.RegisterComponent = (...args) => {
+const allServerAttr=['s-if','s-else','s-else-if','s-for','s-key'];
+const getAllServerAttrArray=()=>{
+  return allServerAttr;
+}
+exports.getAllServerAttrArray=getAllServerAttrArray
+const RegisterComponent = function (...args) {
   // Handle new signature from plugin: RegisterComponent('Name1', Func1, 'Name2', Func2, ...)
   if (typeof args[0] === 'string') {
     for (let i = 0; i < args.length; i += 2) {
@@ -51,8 +54,8 @@ exports.RegisterComponent = (...args) => {
        console.warn('Component registration failed: Component must be a named function. This might happen in production builds without the pawajs Vite plugin.');
     }
   });
-};
-
+}; 
+exports.RegisterComponent=RegisterComponent
 const compoBeforeCall = new Set()
 const compoAfterCall=new Set()
 const renderBeforePawa=new Set()
@@ -83,7 +86,7 @@ let pawaAttributes=new Set()
 /**
  * @param {Array<()=>PluginObject>} func
  */
-export const PluginSystem=(...func)=>{
+exports.PluginSystem=(...func)=>{
   func.forEach(fn=>{ 
     /**
      * @type {PluginObject}
@@ -136,16 +139,16 @@ export const PluginSystem=(...func)=>{
         renderAfterPawa.add(getPlugin.renderSystem?.afterPawa)
       }
       if (getPlugin.renderSystem?.beforeChildRender && typeof getPlugin.renderSystem?.beforeChildRender === 'function') {
-        renderAfterPawa.add(getPlugin.renderSystem?.beforeChildRender)
+        renderBeforeChild.add(getPlugin.renderSystem?.beforeChildRender)
       }
     }
   })
 }
-
+const PawaElement = require('./pawaElement.js')
 
 /**
  * 
- * @param {PawaElement|HTMLElement} el 
+ * @param {import('./pawaElement.js').default|
  * @returns 
  */
 const component=(el)=>{
@@ -209,7 +212,7 @@ stateContext._name=el._componentName
     const div=document.createElement('div')
     let compo 
     try{
-      compo=sanitizeTemplate(component.component(app))
+      compo=component.component(app)
     }catch(error){
       console.error(`error from ${stateContext._name}`,error.message,error.stack)
     }
@@ -251,7 +254,7 @@ const textContentHandler=(el)=>{
         return
       }
       const nodesMap = new Map();
-      
+      const curentHtmlString=el.outerHTML
       // Get all text nodes and store their original content
       const textNodes = el.childNodes.filter(node => node.nodeType === 3);
       textNodes.forEach(node => {
@@ -265,7 +268,7 @@ const textContentHandler=(el)=>{
             const regex = /@\((.*?)\)/g;
             
             value = value.replace(regex, (match, expression) => {
-                const func = evaluateExpr(expression,el._context)
+                const func = evaluateExpr(expression,el._context,`from text interpolation @() - ${expression} at ${curentHtmlString}`)
                 return String(func);
               });            
             textNode.nodeValue = value;
@@ -286,6 +289,7 @@ const attributeHandler=(el,attr)=>{
       if(el._running){
         return
       }
+      const curentHtmlString=el.outerHTML
       const removableAttributes=new Set()
       removableAttributes.add('disabled')
       const evaluate=()=>{
@@ -300,7 +304,7 @@ const attributeHandler=(el,attr)=>{
         const values = keys.map((key) => resolvePath(key, el._context));
         
         value = value.replace(regex, (match, expression) => {
-          return evaluateExpr(expression,el._context)
+          return evaluateExpr(expression,el._context,`from text interpolation @() - ${expression} at ${curentHtmlString} attribute ${attr.name}`)
         });
         
         if (removableAttributes.has(attr.name)) {
@@ -359,13 +363,13 @@ const attributeHandler=(el,attr)=>{
             
             try {
               
-              htmlString = evaluateExpr(expression,context)
+              htmlString = evaluateExpr(expression,context,`from text interpolation @html() - ${expression}`)
             } catch (e) {
               htmlString = `<span style="color:red;">[Invalid Expression]</span>`;
             }
   
             const temp = document.createElement('div');
-            temp.innerHTML = sanitizeTemplate(htmlString);
+            temp.innerHTML = htmlString;
             fragments.push(...temp.childNodes);
             hasHtml = true;
   
@@ -394,19 +398,14 @@ const attributeHandler=(el,attr)=>{
   
     evaluate();
   };
-const directives={
-    'server-if':If,
-    'server-else':Else,
-    'server-else-if':ElseIf,
-    'server-for':For
-}
+  
 
 /**
  * 
  * @param {PawaElement | HTMLElement} el 
  * @param {object} contexts 
  */
-exports.render=(el,contexts={})=>{
+const render = (el, contexts = {}) => {
     const context={
         ...contexts
     }
@@ -494,8 +493,15 @@ exports.render=(el,contexts={})=>{
         })
     }
 }
-
-exports.startApp=(html,context={})=>{
+exports.render=render
+const { If,Else,ElseIf,For } = require('./power.js');
+const directives={
+    's-if':If,
+    's-else':Else,
+    's-else-if':ElseIf,
+    's-for':For
+}
+exports.startApp = (html, context = {}) => {
     const app=new DOMParser()
     const {document}=parseHTML()
    const body= app.parseFromString(html,'text/html')
@@ -507,6 +513,6 @@ exports.startApp=(html,context={})=>{
     
     return {
       element:div,
-      toString:()=>element.innerHTML
+      toString:()=>div.outerHTML
     }
 }
