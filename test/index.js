@@ -11,7 +11,7 @@ const component=({app})=>{
                 <span s-if="user">Allwell</span>
                 <span s-else>Login</span>
             </h1> 
-            <div s-for="items in array">
+            <div s-for="items in array" s-pawa-avoid>
                 <span>@(items)</span>
             </div>       
         </div>

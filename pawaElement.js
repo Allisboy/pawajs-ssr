@@ -18,12 +18,21 @@ class PawaElement {
         this._el=element
         this._slots=document.createDocumentFragment()
         this._context=context
+        this._avoidPawaRender=element.hasAttribute('s-pawa-avoid')
         this._props={}
         this._template=element.outerHTML
         this._component=null
         this._componentName=''
         this._running=false
         this._hasForOrIf=this.hasForOrIf
+        if(this._avoidPawaRender){
+      element.removeAttribute('s-pawa-avoid')
+      Array.from(element.children).forEach((child) => {
+        if (child.nodeType === 1) {
+          child.setAttribute('s-pawa-avoid','')
+        }
+      })
+    }
         /** 
         * @typedef{object}
         * @property{any} 

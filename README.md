@@ -42,3 +42,4 @@ const html=()=>{
 const newHtml=pawa.startApp(html())
 ```
 * Notice pawajs ssr uses @() instead of @{} and pawajs ssr doesn't use client's hooks
+# MIT LICENSE

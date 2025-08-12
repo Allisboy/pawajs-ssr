@@ -97,7 +97,7 @@ exports.convertToNumber=(str)=>{
   }
   return hash
 };
-exports.ComponentProps=(some,message,name)=>{
+const ComponentProps=(some,message,name)=>{
 
   return({
   Array:()=>{
@@ -152,7 +152,7 @@ exports.ComponentProps=(some,message,name)=>{
 
 };
 
-
+exports.ComponentProps=ComponentProps
 exports.replaceTemplateOperators = (expression) => {
   return expression
     .replace(/\/\*/g, '`')

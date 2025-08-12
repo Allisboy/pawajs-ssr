@@ -416,16 +416,19 @@ const render = (el, contexts = {}) => {
         console.error(error.message,error.stack)
       }
     }
-    innerHtml(el,context)
+    if(!el.hasAttribute('s-pawa-avoid')){
+      innerHtml(el,context)
+    }
     PawaElement.Element(el,context)
     
-     if(el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@('))){
+     if(el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@(')) && !el._avoidPawaRender){
         textContentHandler(el)  
      }
      let startAttribute=false
    const startObject={}
    //get startsWith plugin
-   startsWithSet.forEach( starts=>{
+   if (!el._avoidPawaRender) {
+    startsWithSet.forEach( starts=>{
     
     el._attributes.forEach(attr =>{
       if(attr.name.startsWith('on:')){
@@ -434,6 +437,7 @@ const render = (el, contexts = {}) => {
       }
     })
    })
+   }
      for (const fn of renderAfterPawa) {
       try {
         fn(el)
@@ -441,44 +445,47 @@ const render = (el, contexts = {}) => {
         console.error(error.message,error.stack)
       }
     }
-    el.attributes.forEach(attr=>{
-        if (directives[attr.name]) {
-            directives[attr.name](el,attr)  
-        }else if(attr.value.includes('@(')){
-            attributeHandler(el,attr)
-        }else if(fullNamePlugin.has(attr.name)) {
-        if(externalPlugin[attr.name]){
-          const plugin= externalPlugin[attr.name]
-          try{
-            if (typeof plugin !== 'function') {
-              console.warn(`${attr.name} plugin must be a function`)
-              return
+    if (!el._avoidPawaRender) {
+      
+      el.attributes.forEach(attr=>{
+          if (directives[attr.name]) {
+              directives[attr.name](el,attr)  
+          }else if(attr.value.includes('@(')){
+              attributeHandler(el,attr)
+          }else if(fullNamePlugin.has(attr.name)) {
+          if(externalPlugin[attr.name]){
+            const plugin= externalPlugin[attr.name]
+            try{
+              if (typeof plugin !== 'function') {
+                console.warn(`${attr.name} plugin must be a function`)
+                return
+              }
+              plugin(el,attr)
+            }catch(error){
+              console.warn(error.message,error.stack)
             }
-            plugin(el,attr)
-          }catch(error){
-            console.warn(error.message,error.stack)
+          }
+        }else if(startAttribute){
+          const name=startObject[attr.name]
+          if(externalPlugin[name]){
+            const plugin= externalPlugin[name]
+            try{
+              if (typeof plugin !== 'function') {
+                console.warn(`${name} plugin must be a function`)
+                return
+              }
+              plugin(el,attr)
+            }catch(error){
+              console.warn(error.message,error.stack)
+            }
           }
         }
-      }else if(startAttribute){
-        const name=startObject[attr.name]
-        if(externalPlugin[name]){
-          const plugin= externalPlugin[name]
-          try{
-            if (typeof plugin !== 'function') {
-              console.warn(`${name} plugin must be a function`)
-              return
-            }
-            plugin(el,attr)
-          }catch(error){
-            console.warn(error.message,error.stack)
-          }
-        }
+          
+      })
+      if (el._componentName) {
+          component(el)
+          return
       }
-        
-    })
-    if (el._componentName) {
-        component(el)
-        return
     }
     for (const fn of renderBeforeChild) {
       try {
