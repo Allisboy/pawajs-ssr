@@ -6,10 +6,10 @@ const component=({app})=>{
     app.insert({user,array})
     return `
         <div>
-            <h1>
+            <h1 -->
                 <span>Hello World</span>
-                <span s-if="user">Allwell</span>
-                <span s-else>Login</span>
+                <span s-if="users">Allwell</span>
+                <span s-else>@(man.value)</span>
             </h1> 
             <div s-for="items in array" s-pawa-avoid>
                 <span>@(items)</span>
@@ -25,5 +25,5 @@ const html=()=>{
         </div>
     `
 }
-const newHtml=pawa.startApp(html())
+const newHtml=pawa.startApp(html(),{},true)
 console.log(newHtml.toString())

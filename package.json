@@ -1,6 +1,6 @@
 {
   "name": "pawa-ssr",
-  "version": "1.0.20",
+  "version": "1.0.23",
   "description": "pawajs ssr libary",
   "main": "index.js",
   "scripts": {

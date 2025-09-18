@@ -37,7 +37,8 @@ exports.matchRoute = (pattern, path) => {
 };
 exports.sanitizeTemplate = (temp) => {
   if (typeof temp !== 'string') return '';
-  return temp.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
+  // return temp.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
+  return temp
 };
 /**
  * Safely evaluates a JavaScript expression in a sandbox.
@@ -47,7 +48,7 @@ exports.sanitizeTemplate = (temp) => {
  * @param {string} error - pass in error message 
  * @returns {any} - The result of the evaluated expression or null on error.
  */
-exports.evaluateExpr = (expr, context = {},error) => {
+exports.evaluateExpr = (expr, context = {},error,element) => {
   try {
     const keys = Object.keys(context);
     const resolvePath = (path, obj) => {
@@ -59,6 +60,9 @@ const values = keys.map((key) => resolvePath(key, context));
       return ${expr}`)(...values)
   } catch (err) {
     console.error(`Evaluation failed for: ${expr}`,error,err.message,err.stack);
+    if (element) {
+      element._createError({message:`${error} ${err.message}`,stack:err.stack})
+    }
     return null;
   }
 };

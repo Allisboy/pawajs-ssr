@@ -11,7 +11,9 @@ exports.getPawaComponentsMap =()=>{
   return components ;
 }
 
-
+let isDevelopment
+const getDevelopment=()=>isDevelopment
+exports.getDevelopment=getDevelopment
 const $state = (arg) => {
     return {
         value: arg
@@ -194,7 +196,8 @@ stateContext._name=el._componentName
         children,
         app:{
           insert,
-          useValidateProps
+          useValidateProps,
+          useInnerContext:()=>el._context
         },
         ...slots,
         ...el._props
@@ -221,19 +224,18 @@ stateContext._name=el._componentName
       }
 
       div.innerHTML=compo
-      if(Object.entries(el._restProps).length > 0){
-          const findElement=div.querySelector('[--]') || div.querySelector('[rest]')
+          const findElement=div.querySelector('[--]') || div.querySelector('[r-]')
           if (findElement) {
-            for (const [key,value] of Object.entries(el._restProps)) {
+            for (const [key,value] of Object.entries(el?._restProps)) {
                 findElement.setAttribute(value.name,value.value)
-                findElement.removeAttribute('--')
-                findElement.removeAttribute('rest')
               }
-          }
+              findElement.removeAttribute('--')
+              findElement.removeAttribute('r-')
+          
         }
         for (const fn of compoAfterCall) {
           try {
-            fn(stateContext,div?.firstElementChild)
+            fn(stateContext,div?.firstElementChild,el)
           } catch (error) {
             console.error(error.message,error.stack)
           }
@@ -499,6 +501,7 @@ const render = (el, contexts = {}) => {
             render(child,el._context)
         })
     }
+    el._setError()
 }
 exports.render=render
 const { If,Else,ElseIf,For } = require('./power.js');
@@ -508,7 +511,8 @@ const directives={
     's-else-if':ElseIf,
     's-for':For
 }
-exports.startApp = (html, context = {}) => {
+exports.startApp = (html, context = {},devlopment=false) => {
+isDevelopment=devlopment
     const app=new DOMParser()
     const {document}=parseHTML()
    const body= app.parseFromString(html,'text/html')

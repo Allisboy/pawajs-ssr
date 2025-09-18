@@ -1,5 +1,5 @@
 const { HTMLElement, parseHTML } = require("linkedom")
-const { getAllServerAttrArray, getPawaComponentsMap } =require("./index.js")
+const { getAllServerAttrArray, getPawaComponentsMap, getDevelopment } =require("./index.js")
 const PawaComponent = require("./pawaComponent.js")
 const { evaluateExpr, splitAndAdd,replaceTemplateOperators } =require("./utils.js")
 
@@ -23,8 +23,12 @@ class PawaElement {
         this._template=element.outerHTML
         this._component=null
         this._componentName=''
+        /**@type {Array<{message:string,stack:string}>} */
+        this._error=[]
         this._running=false
         this._hasForOrIf=this.hasForOrIf
+        this._createError=this.createError
+        this._setError=this.setError
         if(this._avoidPawaRender){
       element.removeAttribute('s-pawa-avoid')
       Array.from(element.children).forEach((child) => {
@@ -76,12 +80,19 @@ class PawaElement {
           })
           this._componentChildren=this._el.innerHTML
         }else{
-          if(this._el.getAttribute('client')){
+          if(this._el.hasAttribute('client')){
             this._el.removeAttribute('client')
           }
         }
       }
-
+      setError(){
+        if (getDevelopment() && this._error.length > 0) {
+          this._el.setAttribute('ssr-error',JSON.stringify(this._error))
+        }
+      }
+      createError({message,stack}){
+        this._error.push({message,stack})
+      }
       //set Component props
       setProps(){
         if (this._componentName) {
@@ -105,6 +116,7 @@ class PawaElement {
                 this._props[name]=func
                 } catch (error) {
                   console.log(error.message,error.stack)
+                  this._createError({message:error.message,stack:error.stack})
                 }
               }
             }
