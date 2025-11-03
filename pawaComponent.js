@@ -13,6 +13,11 @@ class PawaComponent {
        */
       this.prop = {};
       /**
+     * Props Validation rules set for the component (when called)
+     * @type {Object{[any]:{strict:boolean,err:string,default:any,type:any}}>}
+     */
+    this.validPropRule=func?.validateProps || {};
+      /**
        * The component function.
        * @type {Function}
        */

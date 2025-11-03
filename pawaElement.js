@@ -1,5 +1,6 @@
 const { HTMLElement, parseHTML } = require("linkedom")
-const { getAllServerAttrArray, getPawaComponentsMap, getDevelopment } =require("./index.js")
+const {getPawaAttributes, getDevelopment } =require("./index.js")
+const {components}=require('pawajs')
 const PawaComponent = require("./pawaComponent.js")
 const { evaluateExpr, splitAndAdd,replaceTemplateOperators } =require("./utils.js")
 
@@ -19,6 +20,7 @@ class PawaElement {
         this._slots=document.createDocumentFragment()
         this._context=context
         this._avoidPawaRender=element.hasAttribute('s-pawa-avoid')
+        this._client=element.hasAttribute('client')
         this._props={}
         this._template=element.outerHTML
         this._component=null
@@ -29,6 +31,7 @@ class PawaElement {
         this._hasForOrIf=this.hasForOrIf
         this._createError=this.createError
         this._setError=this.setError
+        this._hydrateProps={}
         if(this._avoidPawaRender){
       element.removeAttribute('s-pawa-avoid')
       Array.from(element.children).forEach((child) => {
@@ -67,8 +70,7 @@ class PawaElement {
       }
       
       getComponent(){
-       const components=getPawaComponentsMap()
-        if (components.has(splitAndAdd(this._el.tagName.toUpperCase())) && this._el.getAttribute('client') === null) {
+        if (components.has(splitAndAdd(this._el.tagName.toUpperCase())) && !this._client) {
           this._componentName=splitAndAdd(this._el.tagName.toUpperCase())
           this._component=new PawaComponent(components.get(splitAndAdd(this._el.tagName.toUpperCase())))
           Array.from(this._el.children).forEach(slot =>{
@@ -96,23 +98,28 @@ class PawaElement {
       //set Component props
       setProps(){
         if (this._componentName) {
-         const allServerAttr=getAllServerAttrArray()
+         const allServerAttr=getPawaAttributes()
           this._el.attributes.forEach(attr=>{
-            if(!allServerAttr.includes(attr.name)){
-              if (attr.name.startsWith('-') || attr.name.startsWith('r-')) {
+            if(!allServerAttr.has(attr.name)){
+              if (attr.name.startsWith('-') || !attr.name.startsWith(':')) {
+                if( attr.name === 'resume-component')return
                 let name=''
-                if (attr.name.startsWith('r-')) {
-                  name=attr.name.slice(2)
-                } else {
+                if (attr.name.startsWith('-')) {
                   name=attr.name.slice(1)
-                }
-                
+                } 
                 this._restProps[name]={name:name,value:attr.value}
                 
-              } else {
+              } else if(attr.name.startsWith(':')) {
+                this._hydrateProps[attr.name]=attr.value
+                if(attr.value === '') attr.value=true;
                 try {
-                  const func = evaluateExpr(replaceTemplateOperators(attr.value),this._context,`setting props at ${attr.name} - ${attr.value} : ${this._template}`)
-                const name=attr.name
+                  const func = evaluateExpr(`()=>{
+                  const prop= ${replaceTemplateOperators(attr.value)};
+                  if(prop === '')return prop
+                  return prop
+                  }
+                  `,this._context,`setting props at ${attr.name} - ${attr.value} : ${this._template}`)
+                const name=attr.name.slice(1)
                 this._props[name]=func
                 } catch (error) {
                   console.log(error.message,error.stack)

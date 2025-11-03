@@ -7,39 +7,76 @@ exports.splitAndAdd=(string) => {
    })
    return newString.toUpperCase()
 }
-
-exports.matchRoute = (pattern, path) => {
-  // Remove trailing slashes for consistency
-  const cleanPattern = pattern.replace(/\/$/, '');
-  const cleanPath = path.replace(/\/$/, '');
+exports.processNode = (node, itemContext) => {
   
-  const patternParts = cleanPattern.split('/');
-  const pathParts = cleanPath.split('/');
-  
-  if (patternParts.length !== pathParts.length) {
-    
-    return [false, {}];
+  if (typeof itemContext === 'number') {
+    return
   }
   
-  const params = {};
-  
-  const match = patternParts.every((part, index) => {
-    if (part.startsWith(':')) {
-      // This is a parameter
-      const paramName = part.slice(1);
-      params[paramName] = pathParts[index];
-      return true;
+  if (node.nodeType === 3) { // Text node
+    const text = node.textContent
+    const newText = text.replace(/{{(.+?)}}/g, (match, exp) => {
+      try {
+        const keys = Object.keys(itemContext)
+        
+        const values = keys.map(key => itemContext[key])
+        
+        return new Function(...keys, `return ${exp}`)(...values)
+      } catch {
+        return match
+      }
+    })
+    //console.log(newText)
+    node.textContent = newText
+  } else if (node.attributes) {
+    Array.from(node.attributes).forEach(attr => {
+      const newValue = attr.value.replace(/{{(.+?)}}/g, (match, exp) => {
+        try {
+          const keys = Object.keys(itemContext)
+          const values = keys.map(key => itemContext[key])
+          return new Function(...keys, `return ${exp}`)(...values)
+        } catch {
+          return match
+        }
+      })
+      attr.value = newValue
+    })
+  }
+  Array.from(node.childNodes).forEach((n) => {
+    processNode(n, itemContext)
+  })
+}
+
+exports.extractAtExpressions=(template) =>{
+  const results = [];
+  const regex = /@\{/g;
+  let match;
+
+  while ((match = regex.exec(template)) !== null) {
+    let start = match.index + 2; // skip '@('
+    let depth = 1;
+    let i = start;
+
+    while (i < template.length && depth > 0) {
+      if (template[i] === '{') depth++;
+      else if (template[i] === '}') depth--;
+      i++;
     }
-    return part === pathParts[index];
-  });
-  
-  return [match, params];
-};
-exports.sanitizeTemplate = (temp) => {
-  if (typeof temp !== 'string') return '';
-  // return temp.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
-  return temp
-};
+
+    if (depth === 0) {
+      const expression = template.slice(start, i - 1).trim();
+      results.push({
+        fullMatch: template.slice(match.index, i),
+        expression,
+        start: match.index,
+        end: i,
+      });
+    }
+  }
+
+  return results;
+}
+
 /**
  * Safely evaluates a JavaScript expression in a sandbox.
  *
@@ -66,9 +103,8 @@ const values = keys.map((key) => resolvePath(key, context));
     return null;
   }
 };
-exports.propsValidator=(obj={},propsAttri,name)=>{
-  let newObj={}
-  
+exports.propsValidator=(obj={},propsAttri,name,template,el)=>{
+  let done=true
   const jsTypes=['Array','String','Number']
   for (const[key,value] of Object.entries(obj)) {
     const propsValue=propsAttri[key]
@@ -80,19 +116,24 @@ exports.propsValidator=(obj={},propsAttri,name)=>{
         }
       }else{
         if (value.strict) {
-          console.warn(`props ${key} at ${name} component props is needed`)
-          throw new Error(` ${key} props is needed`|| `${key}  props undefined ${name}`);
+          const msg=value.err?`${value.err}. the props is needed `: `props "${key}" is undefined at PawaComponent.${name}`
+          done=false
+          console.error(msg,`Error at ${template}`)
+          el._createError({message:msg,stack:`ERROR at ${name} props validation`})
+          el._setError()
+          throw new Error(msg,`error at ${template}`);
         }else{
-          if (value.default || value.default === 0) {
-            propsAttri[key]=value.default
+          if (value?.default || value?.default === 0) {
+            propsAttri[key]=()=>value?.defualt
+            el._props[key]=()=>value?.default
           }
         }
 
       }
     }
   }
-  return {...propsAttri}
-};
+  return done
+}
 
 exports.convertToNumber=(str)=>{
   let hash = 0;
@@ -101,60 +142,60 @@ exports.convertToNumber=(str)=>{
   }
   return hash
 };
-const ComponentProps=(some,message,name)=>{
+const ComponentProps=(somes,message,name)=>{
+let some=somes?.() || somes
+    return({
+    Array:()=>{
 
-  return({
-  Array:()=>{
+        if (Array.isArray(some)) {
+            return true
+        }else{
+            throw new Error(message ?message + ' / Not type of an Array ': `${some} must be an array at ${name} component`);
 
-      if (Array.isArray(some)) {
-          return true
-      }else{
-          throw new Error(message ?message + ' / Not type of an Array ': `${some} must be an array at ${name} component`);
+        }
+    },
+    String:()=>{
+        if (typeof some === 'string') {
+            return true
+        }else{
+            throw new Error(message? message + ' / Not type of a String' :`${some} must be a string at ${name} component`);
 
-      }
-  },
-  String:()=>{
-      if (typeof some === 'string') {
-          return true
-      }else{
-          throw new Error(message? message + ' / Not type of a String' :`${some} must be a string at ${name} component`);
+        }
+    },
+    Number:()=>{
+        if (typeof some === 'number') {
+            return true
+        }else{
+            throw new Error(message? message+' / Not type of a Number ': `${some} must be a number at ${name} component`);
 
-      }
-  },
-  Number:()=>{
-      if (typeof some === 'number') {
-          return true
-      }else{
-          throw new Error(message? message+' / Not type of a Number ': `${some} must be a number at ${name} component`);
+        }
+    },
+    Object:()=>{
+        if (typeof some === 'object') {
+            return true
+        }else{
+            throw new Error(message? message+' / Not type of an Object ' :`${some} must be an object at ${name} component`);
 
-      }
-  },
-  Object:()=>{
-      if (typeof some === 'object') {
-          return true
-      }else{
-          throw new Error(message? message+' / Not type of an Object ' :`${some} must be an object at ${name} component`);
+        }
+    },
+    Function:()=>{
+        if (typeof some === 'function') {
+            return true
+        }else{
+            throw new Error(message? message+' / Not type of a Function ': `${some} must be a function at ${name} component`);
+        }
+    },
+    Boolean:()=>{
+        if (typeof some === 'boolean') {
+            return true
+        }else{
+            throw new Error(message? message+' / Not type of a Boolean ' :`${some} must be a Boolean at ${name} component`);
 
-      }
-  },
-  Function:()=>{
-      if (typeof some === 'function') {
-          return true
-      }else{
-          throw new Error(message? message+' / Not type of a Function ': `${some} must be a function at ${name} component`);
-      }
-  },
-  Boolean:()=>{
-      if (typeof some === 'boolean') {
-          return true
-      }else{
-          throw new Error(message? message+' / Not type of a Boolean ' :`${some} must be a Boolean at ${name} component`);
-
-      }
-  },
+        }
+    },
 })
 
-};
+}
 
 exports.ComponentProps=ComponentProps
 exports.replaceTemplateOperators = (expression) => {
