@@ -1,9 +1,10 @@
-const { HTMLElement, parseHTML } = require("linkedom")
-const {getPawaAttributes, getDevelopment } =require("./index.js")
-const {components}=require('pawajs')
-const PawaComponent = require("./pawaComponent.js")
-const { evaluateExpr, splitAndAdd,replaceTemplateOperators } =require("./utils.js")
+import { HTMLElement, parseHTML } from "linkedom"
+import {getPawaAttributes, getDevelopment } from "./index.js"
+import {components} from 'pawajs'
+import PawaComponent from "./pawaComponent.js"
+import { evaluateExpr, splitAndAdd,replaceTemplateOperators } from "./utils.js"
 
+// changed the hydrateProps 
 
 class PawaElement {
   /**
@@ -25,6 +26,9 @@ class PawaElement {
         this._template=element.outerHTML
         this._component=null
         this._componentName=''
+        this._thisSame=element.hasAttribute('pawa-same')
+        this._arrangeAttribute={}
+        this._pawaAlready=element.hasAttribute('p:c')
         /**@type {Array<{message:string,stack:string}>} */
         this._error=[]
         this._running=false
@@ -32,6 +36,10 @@ class PawaElement {
         this._createError=this.createError
         this._setError=this.setError
         this._hydrateProps={}
+        this._resumeAttr=''
+        this._reArrangeAttri=this.reArrange
+        this._replaceResumeAttr=this.replaceResumeAttr
+        this._setResumeAttr=this.setResumeAttr
         if(this._avoidPawaRender){
       element.removeAttribute('s-pawa-avoid')
       Array.from(element.children).forEach((child) => {
@@ -49,6 +57,7 @@ class PawaElement {
         this._componentChildren=null
         this.getComponent()
         this.setProps()
+        this.pawaAttribute()
     }
     /**
      * 
@@ -61,8 +70,76 @@ class PawaElement {
         Object.assign(el,pawa)
         return el   
     }
+    attributes(){
+      this._el.attributes.forEach((value, index,) => {
+        this._arrangeAttribute[value.name]=value.value
+      })
+    }
+    setResumeAttr(name){
+      if(name.startsWith(':')) return
+      this._resumeAttr+=`${name};`
+      this._el.setAttribute('p:C',this._resumeAttr)
+    }
+    pawaAttribute(){
+      const pawaAttr=getPawaAttributes()
+      const setTextResume=()=>{
+        if( this._componentName === ''&& this._el.firstElementChild === null && this._el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@{')) && !this._avoidPawaRender){
+        return this._resumeAttr+='c-t'
+     }
+      }
+      if (this._thisSame) {
+        this._resumeAttr=this._el.getAttribute('p:c')
+        this._el.removeAttribute('pawa-same')
+      }else {
+        if (this._el.hasAttribute('p:c')) {
+          this._resumeAttr=this._el.getAttribute('p:c')
+          this._el.attributes.forEach((value, index, array) => {
+            if(this._resumeAttr.includes(value.name) || value.name === 'p:c')return
+            if (value.name.startsWith(':')) return
+            this._resumeAttr+=`${value.name};`
+          })
+        }else{
+              this._el.attributes.forEach((value, index, array) => {
+            if(this._resumeAttr.includes(value.name) || value.name === 'p:c' )return
+            if (value.name.startsWith(':')) return
+            this._resumeAttr+=`${value.name};`
+          })
+        }
+        setTextResume()
+      }
+      this._el.setAttribute('p:c',this._resumeAttr)
+    }
+    replaceResumeAttr(name,newName,value,ele){
+      if (ele === undefined) {
+        this._el.setAttribute(newName,value)
+        const array=this._resumeAttr.split(';')
+        const index=array.indexOf(name,0)
+        array[index]=newName
+        const toString=array.join(';')
+        this._el.setAttribute('p:c',toString)
+        
+      }else{
+        ele.setAttribute(newName,value)
+        ele.setAttribute('p:c',`${newName};`)
+      }
+    }
+    reArrange(name,value,replace){
+      const newAttribute={}
+      if(this._arrangeAttribute){
+        this._el.attributes.forEach((value, index) => {
+          this._el.removeAttribute(value.name)
+        })
+        for (const [key,value] of Object.entries(this._arrangeAttribute)) {
+          if (key === replace) {
+            this._el.setAttribute(name,value)
+          }else{
+            this._el.setAttribute(key,value)
+          }
+        }
+      }
+    }
     hasForOrIf(){
-        if (this._el.getAttribute('s-if') || this._el.getAttribute('s-for') || this._el.getAttribute('s-else') || this._el.getAttribute('s-else-if')) {
+        if (this._el.getAttribute('if') || this._el.getAttribute('for') || this._el.getAttribute('else') || this._el.getAttribute('else-if')) {
           return true
         }else{
           return false
@@ -82,8 +159,8 @@ class PawaElement {
           })
           this._componentChildren=this._el.innerHTML
         }else{
-          if(this._el.hasAttribute('client')){
-            this._el.removeAttribute('client')
+          if(this._el.hasAttribute('only-client')){
+            this._el.removeAttribute('only-client')
           }
         }
       }
@@ -101,16 +178,18 @@ class PawaElement {
          const allServerAttr=getPawaAttributes()
           this._el.attributes.forEach(attr=>{
             if(!allServerAttr.has(attr.name)){
-              if (attr.name.startsWith('-') || !attr.name.startsWith(':')) {
-                if( attr.name === 'resume-component')return
+              if ( !attr.name.startsWith(':')) {
+                if( attr.name.startsWith('c-') || attr.name.startsWith('p:c')) return
                 let name=''
                 if (attr.name.startsWith('-')) {
                   name=attr.name.slice(1)
-                } 
+                }else{
+                  name=attr.name
+                }
                 this._restProps[name]={name:name,value:attr.value}
                 
               } else if(attr.name.startsWith(':')) {
-                this._hydrateProps[attr.name]=attr.value
+                this._hydrateProps[attr.name.slice(1)]=attr.value
                 if(attr.value === '') attr.value=true;
                 try {
                   const func = evaluateExpr(`()=>{
@@ -131,4 +210,4 @@ class PawaElement {
         }
       }
 }
-module.exports = PawaElement
+export default PawaElement

@@ -73,4 +73,4 @@ class PawaComponent {
       return this.component;
     }
 }
-module.exports = PawaComponent
+export default PawaComponent

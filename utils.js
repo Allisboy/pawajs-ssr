@@ -1,5 +1,5 @@
 
-exports.splitAndAdd=(string) => {
+export const splitAndAdd=(string) => {
     const strings=string.split('-')
    let newString=''
    strings.forEach(str=>{
@@ -7,7 +7,64 @@ exports.splitAndAdd=(string) => {
    })
    return newString.toUpperCase()
 }
-exports.processNode = (node, itemContext) => {
+const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+export const pawaGenerateId = (length = 10) => {
+  const rb = crypto.getRandomValues(new Uint8Array(length));
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += alphabet[rb[i] % alphabet.length];
+  }
+  return result;
+};
+export const reArrangeAttri=(el,name,value,replace)=>{
+    const attr={}
+    // Snapshot attributes to array to safely remove them while iterating
+    Array.from(el.attributes).forEach(att =>{
+      attr[att.name]=att.value
+      el.removeAttribute(att.name)
+    })
+    if(!replace){
+      attr[name]=value
+    }
+    const array=Object.entries(attr)
+    
+    // Standard reverse loop is safer and faster than the previous while loop
+    for (let i = array.length - 1; i >= 0; i--) {
+      const [key, val] = array[i];
+      if(key === replace){
+        el.setAttribute(name,value)
+      }else{
+        el.setAttribute(key,val)
+      }
+    }
+}
+export const resumeAttribute=(el,name,value,not=false)=>{
+   const attr={}
+   const resAttr={}
+   if (not) {
+    resAttr[name]=value
+   }
+   el.attributes.forEach(value=>{
+    if(value.name.startsWith('resume-')){
+      resAttr[value.name]=value.value
+    }else{
+      attr[value.name]=value.value
+    }
+    el.removeAttribute(value.name)
+   })
+   for(const [key,values] of Object.entries(attr)){
+    el.setAttribute(key,values)
+   }
+   if(!not){
+     el.setAttribute(name,value)
+   }
+   for(const [key,values] of Object.entries(resAttr)){
+     el.setAttribute(key,values)
+    }
+    
+}
+export const processNode = (node, itemContext) => {
   
   if (typeof itemContext === 'number') {
     return
@@ -16,28 +73,18 @@ exports.processNode = (node, itemContext) => {
   if (node.nodeType === 3) { // Text node
     const text = node.textContent
     const newText = text.replace(/{{(.+?)}}/g, (match, exp) => {
-      try {
-        const keys = Object.keys(itemContext)
-        
-        const values = keys.map(key => itemContext[key])
-        
-        return new Function(...keys, `return ${exp}`)(...values)
-      } catch {
-        return match
-      }
+      // Use the cached expression evaluator for performance
+      const result = evaluateExpr(exp, itemContext, `in processNode for text: ${exp}`);
+      return result !== null ? String(result) : match;
     })
     //console.log(newText)
     node.textContent = newText
   } else if (node.attributes) {
     Array.from(node.attributes).forEach(attr => {
       const newValue = attr.value.replace(/{{(.+?)}}/g, (match, exp) => {
-        try {
-          const keys = Object.keys(itemContext)
-          const values = keys.map(key => itemContext[key])
-          return new Function(...keys, `return ${exp}`)(...values)
-        } catch {
-          return match
-        }
+        // Use the cached expression evaluator for performance
+        const result = evaluateExpr(exp, itemContext, `in processNode for attribute ${attr.name}: ${exp}`);
+        return result !== null ? String(result) : match;
       })
       attr.value = newValue
     })
@@ -47,7 +94,7 @@ exports.processNode = (node, itemContext) => {
   })
 }
 
-exports.extractAtExpressions=(template) =>{
+export const extractAtExpressions=(template) =>{
   const results = [];
   const regex = /@\{/g;
   let match;
@@ -85,16 +132,25 @@ exports.extractAtExpressions=(template) =>{
  * @param {string} error - pass in error message 
  * @returns {any} - The result of the evaluated expression or null on error.
  */
-exports.evaluateExpr = (expr, context = {},error,element) => {
+const expressionCache = new Map();
+
+export const evaluateExpr = (expr, context = {},error,element) => {
   try {
     const keys = Object.keys(context);
-    const resolvePath = (path, obj) => {
-    return path.split('.').reduce((acc, key) => acc?.[key], obj);
-};
-const values = keys.map((key) => resolvePath(key, context));
-    return new Function(...keys,`
-      const require=null
-      return ${expr}`)(...values)
+    // Create a cache key based on the expression and the available context keys
+    // We sort keys to ensure consistent cache hits regardless of key order
+    const cacheKey = expr + '|||' + keys.sort().join(',');
+
+    let func = expressionCache.get(cacheKey);
+    if (!func) {
+      func = new Function(...keys, `
+        const require=null
+        return ${expr}`);
+      expressionCache.set(cacheKey, func);
+    }
+
+    const values = keys.map((key) => context[key]);
+    return func(...values);
   } catch (err) {
     console.error(`Evaluation failed for: ${expr}`,error,err.message,err.stack);
     if (element) {
@@ -103,7 +159,7 @@ const values = keys.map((key) => resolvePath(key, context));
     return null;
   }
 };
-exports.propsValidator=(obj={},propsAttri,name,template,el)=>{
+export const propsValidator=(obj={},propsAttri,name,template,el)=>{
   let done=true
   const jsTypes=['Array','String','Number']
   for (const[key,value] of Object.entries(obj)) {
@@ -123,7 +179,7 @@ exports.propsValidator=(obj={},propsAttri,name,template,el)=>{
           el._setError()
           throw new Error(msg,`error at ${template}`);
         }else{
-          if (value?.default || value?.default === 0) {
+          if (value?.default !== undefined) {
             propsAttri[key]=()=>value?.defualt
             el._props[key]=()=>value?.default
           }
@@ -135,14 +191,14 @@ exports.propsValidator=(obj={},propsAttri,name,template,el)=>{
   return done
 }
 
-exports.convertToNumber=(str)=>{
+export const convertToNumber=(str)=>{
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash=(hash * 31 + str.charCodeAt(i)) | 0
   }
   return hash
 };
-const ComponentProps=(somes,message,name)=>{
+export const ComponentProps=(somes,message,name)=>{
 let some=somes?.() || somes
     return({
     Array:()=>{
@@ -196,10 +252,9 @@ let some=somes?.() || somes
 })
 
 }
-
-exports.ComponentProps=ComponentProps
-exports.replaceTemplateOperators = (expression) => {
+export const replaceTemplateOperators = (expression) => {
   return expression
     .replace(/\/\*/g, '`')
     .replace(/\*\//g, '`'); // Also replace closing */ with backtick if needed
 };
+

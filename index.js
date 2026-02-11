@@ -1,15 +1,25 @@
-const { DOMParser,parseHTML, HTMLElement} =require('linkedom')
-const {setServer}=require('pawajs/server')
-const PawaComponent = require('./pawaComponent.js')
-const { sanitizeTemplate,propsValidator, evaluateExpr,extractAtExpressions } = require('./utils.js');
-const {AsyncLocalStorage}=require('node:async_hooks')
+import {getServerInstance, setServer} from 'pawajs/server.js'
+import { DOMParser,parseHTML, HTMLElement} from 'linkedom'
+import PawaComponent from './pawaComponent.js'
+import { propsValidator, evaluateExpr,extractAtExpressions, reArrangeAttri,resumeAttribute, pawaGenerateId } from './utils.js'
+import {AsyncLocalStorage} from'node:async_hooks'
+import { If,For,State,Switch, Key } from'./power.js';
+import PawaElement from'./pawaElement.js'
 
+const PAWA_STORE_SYMBOL = Symbol.for('pawa.ssr.store');
+
+const getStoreInstance = () => {
+  if (!global[PAWA_STORE_SYMBOL]) {
+    global[PAWA_STORE_SYMBOL] = new AsyncLocalStorage();
+  }
+  return global[PAWA_STORE_SYMBOL];
+}
+const store = getStoreInstance();
 const useInsert=(obj={})=>{
   try{
-    const current=store.getStore().stateContext
-    
-    if(current?.insert){
-      Object.assign(store.getStore().stateContext.insert,obj)
+    const appContext = store.getStore();
+    if(appContext?.stateContext?.insert){
+      Object.assign(appContext.stateContext.insert, obj);
     }
   }catch(error){
     if(isDevelopment){
@@ -22,9 +32,9 @@ const setContext=()=>{
   const id=crypto.randomUUID()
   const setValue=(context={})=>{
     try{
-    const current=store.getStore().stateContext
-    if(current?.transportContext){
-      store.getStore().stateContext.transportContext[id]=context
+      const appContext = store.getStore();
+      if(appContext?.stateContext?.transportContext){
+        appContext.stateContext.transportContext[id] = context;
     }
     }catch(error){
       if(isDevelopment){
@@ -37,13 +47,36 @@ const setContext=()=>{
     setValue
   }
 }
+const accessChild=()=>{
+  try{
+    const appContext = store.getStore();
+    if (appContext?.stateContext) {
+      appContext.stateContext.accessChild = true;
+    }
+  }catch(error){
+    if(isDevelopment){
+      console.log(error.message,'this is from component',error.stack)
+    }
+  }
+}
+const useServer=()=>{
+  try{
+    const appContext = store.getStore();
+    if (appContext?.stateContext) {
+      appContext.stateContext.serializeData = true;
+    }
+  }catch(error){
+    if(isDevelopment){
+      console.log(error.message,'this is from component',error.stack)
+    }
+  }
+}
 const useContext=(context)=>{
   try{
-    const current=store.getStore().stateContext
-    // console.log(current)
+    const appContext = store.getStore();
     const id=context?.id
-    if(current?.transportContext && id){
-      return current.transportContext[id]
+    if(appContext?.stateContext?.transportContext && id){
+      return appContext.stateContext.transportContext[id];
     }
     return {}
   }catch(error){
@@ -54,8 +87,8 @@ const useContext=(context)=>{
 }
 const useInnerContext=()=>{
   try{
-    const context=store.getStore().stateContext
-    return context?.innerContext || {}
+    const appContext = store.getStore();
+    return appContext?.stateContext?.innerContext || {};
   }catch(error){
     if(isDevelopment){
       console.log(error.message,error.stack)
@@ -63,7 +96,7 @@ const useInnerContext=()=>{
   }
 }
 
-const $state=async(initialValue)=>{
+const $state=(initialValue)=>{
   const state={value:null}
   if(typeof initialValue === 'function'){
     const res=initialValue()
@@ -84,30 +117,29 @@ setServer({
   useInnerContext,
   useInsert,
   setContext,
-  $state
+  $state,
+  accessChild,
+  useServer
 })
 
 const components = new Map();
-exports.getPawaComponentsMap =()=>{
+export const getPawaComponentsMap =()=>{
   return components ;
 }
-const store=new AsyncLocalStorage()
-const getStore=()=>{
+ const getStore=()=>{
   return store.getStore()
 }
 
 let isDevelopment
-const getDevelopment=()=>isDevelopment
-exports.getDevelopment=getDevelopment
+export const getDevelopment=()=>isDevelopment
 
 /**
  * @type{string}
  */
-const allServerAttr=['if','else','else-if','for','key','ref'];
-const getAllServerAttrArray=()=>{
+const allServerAttr=['if','else','else-if','for','ref'];
+export const getAllServerAttrArray=()=>{
   return allServerAttr;
 }
-exports.getAllServerAttrArray=getAllServerAttrArray
 
 const compoBeforeCall = new Set()
 const compoAfterCall=new Set()
@@ -123,8 +155,8 @@ const setPawaAttribute=(...attr)=>{
     pawaAttributes.add(att)
   })
 }
-setPawaAttribute('if','else','else-if','s-for','s-ref','s-key')
-exports.getPawaAttributes=()=>pawaAttributes
+setPawaAttribute('if','else','else-if','for','ref','key')
+export const getPawaAttributes=()=>pawaAttributes
 /**
  * @typedef {{startsWith:string,fullName:string,plugin:(el:HTMLElement | PawaElement,attr:object)=>void}} AttriPlugin
  */
@@ -145,15 +177,73 @@ exports.getPawaAttributes=()=>pawaAttributes
 /**
  * @param {Array<()=>PluginObject>} func
  */
+export const PluginSystem=(...func)=>{
+  func.forEach(fn=>{ 
+    /**
+     * @type {PluginObject}
+     */
+    if (typeof fn !== 'function') {
+      console.warn('plugin must be a function that returns the plugin objects')
+      return
+    }
+    const getPlugin=fn()
+    // attributes plugin or extension
+    
+    if (getPlugin?.attribute) {
+      getPlugin.attribute.register.forEach(attrPlugins =>{
+        if (attrPlugins.fullName && attrPlugins.startsWith) {
+          console.warn('Either Plugins FullName or startsWith. you are not required to use to of does plugin registers at this same entry.')
+          return
+        }
+        if (attrPlugins?.fullName) {
+          if (pawaAttributes.has(attrPlugins.fullName) ) {
+            console.warn(`attribute plugin already exist ${attrPlugins.fullName}`)
+            return
+          }
+          pawaAttributes.add(attrPlugins.fullName)
+        fullNamePlugin.add(attrPlugins.fullName)
+        externalPlugin[attrPlugins.fullName]=attrPlugins?.plugin
+        }else if (attrPlugins?.startsWith) {
+          if (pawaAttributes.has(attrPlugins.startsWith) ) {
+          console.warn(`attribute plugin already exist ${attrPlugins.startsWith}`)
+          return
+        }
+        pawaAttributes.add(attrPlugins.startsWith)
+        startsWithSet.add(attrPlugins.startsWith)
+        externalPlugin[attrPlugins.startsWith]=attrPlugins?.plugin
+        }
+      })
+    }
+    if (getPlugin?.component) {
+      if (getPlugin.component?.beforeCall && typeof getPlugin.component?.beforeCall === 'function') {
+        compoBeforeCall.add(getPlugin.component.beforeCall)
+      }
+      if (getPlugin.component?.afterCall && typeof getPlugin.component?.afterCall === 'function') {
+        compoAfterCall.add(getPlugin.component.afterCall)
+      }
+    }
+    if (getPlugin?.renderSystem) {
+      if (getPlugin.renderSystem?.beforePawa && typeof getPlugin.renderSystem?.beforePawa === 'function') {
+        renderBeforePawa.add(getPlugin.renderSystem?.beforePawa)
+      }
+      if (getPlugin.renderSystem?.afterPawa && typeof getPlugin.renderSystem?.afterPawa === 'function') {
+        renderAfterPawa.add(getPlugin.renderSystem?.afterPawa)
+      }
+      if (getPlugin.renderSystem?.beforeChildRender && typeof getPlugin.renderSystem?.beforeChildRender === 'function') {
+        renderBeforeChild.add(getPlugin.renderSystem?.beforeChildRender)
+      }
+    }
+  })
+}
 
-exports.useValidateComponent=(component,object)=>{
+export const useValidateComponent=(component,object)=>{
   if (typeof component === 'function' ) {
     if(component.name){
       component.validateProps=object
     }
   }
 }
-const PawaElement = require('./pawaElement.js')
+
 /**
  * @typedef {{
  *    formerContext:AppStateContextType,
@@ -173,7 +263,7 @@ const component=async (el)=>{
     }
    try {
     const slot=el._slots
-    const {document}=parseHTML()
+    const document = el.ownerDocument
     const slots={}
     /**@type {AppStateContextType} */
     const oldAppContext=getStore().stateContext
@@ -186,26 +276,27 @@ const component=async (el)=>{
       name:el._componentName,
       insert:{},
       component:el._component,
+      accessChild:false,
+      serializeData:null,
     }
     Array.from(slot.children).forEach(prop =>{
       if (prop.getAttribute('prop')) {
-        slots[prop.getAttribute('prop')]=prop.innerHTML
+        slots[prop.getAttribute('prop')]=()=>prop.innerHTML
       }else{
         console.warn('sloting props must have prop attribute')
       }
     }) 
     const hydrate={
+      children:'',
       props:{
-        ...el._hydrateProps
+        ...el._hydrateProps,
       },
-      slot:{
-        ...slots
-      }
+      slots:{...slots},
     }
-    const id=crypto.randomUUID()
+    const id=pawaGenerateId(10)
     const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
-const comment = document.createComment(`component-${id}-${el._componentName}-${encodeJSON(hydrate)}`);
-const endComment=document.createComment(`end component-${id}-${el._componentName}-${encodeJSON(hydrate)}`)
+const comment = document.createComment(`component+${id}`);
+const endComment=document.createComment(`end component+${id}+${el._componentName}`)
     el.replaceWith(endComment)
     endComment.parentElement.insertBefore(comment,endComment)
     const children=el._componentChildren
@@ -214,9 +305,6 @@ const endComment=document.createComment(`end component-${id}-${el._componentName
      */
     const component =el._component
     stateContext=component
-    const insert=(obj={})=>{
-       Object.assign(store.getStore().stateContext.insert,obj)
-    }
     /**
  * 
  * @param {object} props 
@@ -232,10 +320,6 @@ appContext.component._prop={children,...el._props,...slots}
 
     const app = {
         children,
-        app:{
-          insert,
-          useInnerContext:()=>el._context
-        },
         ...slots,
         ...el._props
       }
@@ -243,11 +327,12 @@ appContext.component._prop={children,...el._props,...slots}
             try {
             await fn(stateContext,app)
             } catch (error) {
-              console.error(error.message,error.stack)
+              console.error(`Error in beforeCall for ${el._componentName}:`, error.message)
             }
           } 
       
     const div=document.createElement('div')
+    el._setResumeAttr(`c-compo-${el._componentName}-${id}`)
     let compo=""
     try{
       if(done){
@@ -259,10 +344,11 @@ appContext.component._prop={children,...el._props,...slots}
       console.error(`error from PawaComponent.${appContext.component._name}`,error.message,error.stack)
     }
     if (appContext?.insert){
-        Object.assign(el._context,appContext.insert)
-      }
-      if(typeof compo !== 'boolean' && compo){
-        div.innerHTML=compo
+      Object.assign(el._context,appContext.insert)
+    }
+    // if(compo instanceOf Promise){}
+    if(typeof compo !== 'boolean' && compo){
+      div.innerHTML=compo
       }
           const findElement=div.querySelector('[--]') || div.querySelector('[r-]')
           if (findElement) {
@@ -271,26 +357,45 @@ appContext.component._prop={children,...el._props,...slots}
               }
               findElement.removeAttribute('--')
               findElement.removeAttribute('r-')
-          
         }
+        
+        // Handle multiple root nodes (Fragments)
+        const newElements = Array.from(div.children)
         for (const fn of compoAfterCall) {
           try {
-          await fn(appContext,div?.firstElementChild,el)
+            // Note: passing the first child might be limiting if there are multiple, 
+            // but keeping API consistent for now.
+            await fn(appContext, newElements[0], el)
           } catch (error) {
             console.error(error.message,error.stack)
           }
         }
-        const newElement=div.firstElementChild
-        if (newElement) {
-        comment.parentElement.insertBefore(newElement,endComment)
-        el.attributes.forEach(attr =>{
-          if (attr.name.startsWith('resume-')) {
-            newElement.setAttribute(attr.name,attr.value)
+
+        if (appContext.accessChild) {
+          hydrate.children=children.trim()
+        }
+        if (appContext.serializeData) {
+          hydrate.insert=appContext.insert
+        }
+        hydrate.context=[]
+          for (const [key] of Object.entries(appContext.insert)) {
+            hydrate.context.push(key)
           }
-        })
-        newElement.setAttribute('resume-component',id)
-        await render(newElement,el._context)
-      }
+          comment.data=`component+${id}+${el._componentName}+${encodeJSON(hydrate)}`
+        
+        for (const newElement of newElements) {
+          comment.parentElement.insertBefore(newElement, endComment)
+          newElement.setAttribute('p:c', el.getAttribute('p:c'))
+          
+          Array.from(el.attributes).forEach((value) => {
+            if (value.name.startsWith('c-')) {
+              newElement.setAttribute(value.name, value.value)
+            }
+          })
+          
+          newElement.setAttribute(`c-c-${el._componentName}-${id}`, id)
+          await render(newElement, el._context)
+        }
         
         appContext.mount.forEach(async(call)=>{
           await call()
@@ -301,39 +406,42 @@ appContext.component._prop={children,...el._props,...slots}
     
    }
 }
-const templates=(el,context)=>{
+const templates=async(el,context)=>{
   if(el._running)return
-  const {document}=parseHTML()
-       const id=crypto.randomUUID()
-       const comment=document.createComment(`template-${id}`)
-       const endComment=document.createComment(`template-${id}`)
+  const document = el.ownerDocument
+       const comment=document.createComment(`<template>`)
+       const endComment=document.createComment(`</template>`)
        el.replaceWith(endComment)
        
        endComment.parentElement.insertBefore(comment,endComment)
        let element=[]
-       Array.from(el.content.children).forEach((child) => {
-           endComment.parentElement.insertBefore(child,endComment)
-           element.push(child)
-       })
-       element.forEach(child=>{
-          el.attributes.forEach(attr=>{
-            if(attr.name.startsWith('resume-')){
+       for (const child of Array.from(el.content.children)) {
+         endComment.parentElement.insertBefore(child,endComment)
+         element.push(child)
+        }
+        
+        for (const [i, child] of element.entries()) {
+          child.setAttribute('p:c',el.getAttribute('p:c'))
+          if(i === 0){
+            for (const attr of Array.from(el.attributes)) {
+            if(attr.name.startsWith('c-')){
               child.setAttribute(attr.name,attr.value)
             }
-          })
-          child.setAttribute('resume-template',id)
-          render(child,el._context,tree) 
-      })
+          }
+          }
+          await render(child,el._context) 
+      }
 }
-const textContentHandler = (el) => {
-  if (el._running) return;
-
+const textContentHandler = async(el) => {
+  if (el._running || el._componentName) return;
+  if (el._hasForOrIf()) {
+    return;
+  }
   const nodesMap = new Map();
   const currentHtmlString = el.outerHTML;
-
-  const {document}=parseHTML()
-  const comment=document.createComment(`textEvalautor-${el.innerHTML}`)
-  el.setAttribute('resume-text',true)
+  el.setAttribute('c-t',true)
+  const document = el.ownerDocument
+  const comment=document.createComment(`textEvaluator-${el.innerHTML}`)
   el.appendChild(comment)
   // Get all text nodes and store their original content
   const textNodes = Array.from(el.childNodes).filter(node => node.nodeType === 3);
@@ -348,7 +456,6 @@ const textContentHandler = (el) => {
         let value = nodesMap.get(textNode); // Always start from original text
 
         const expressions = extractAtExpressions(value);
-        // console.log(expressions);
         expressions.forEach(({ fullMatch, expression }) => {
           const func = evaluateExpr(
             expression,
@@ -357,7 +464,7 @@ const textContentHandler = (el) => {
           );
           value = value.replace(fullMatch, String(func));
         });
-        // console.log(value);
+        
         textNode.nodeValue = value;
       });
     } catch (error) {
@@ -365,17 +472,18 @@ const textContentHandler = (el) => {
       console.error(error.message, error.stack);
     }
   };
-
+  
   evaluate();
+  
 };
-const attributeHandler = (el, attr) => {
+const attributeHandler =async (el, attr) => {
   if (el._hasForOrIf()) {
     return;
   }
   if (el._running) {
     return;
   }
-  el.setAttribute(`resume-attr-${attr.name}`,attr.value)
+  el._replaceResumeAttr(attr.name,`c-at-${attr.name}`,attr.value)
   const currentHtmlString = el.outerHTML;
   const removableAttributes = new Set();
   removableAttributes.add('disabled');
@@ -408,91 +516,35 @@ const attributeHandler = (el, attr) => {
   };
 
   evaluate();
+  
 };
-/**
-   * @param {HTMLElement} el
-   */
-  const innerHtml = (el,context) => {
-    if (el.getAttribute('client')) {
-      return
-    }
-    const {document}=parseHTML()
-    const nodesMap = new Map();
   
-    // Get all text nodes and store original value
-    const textNodes = Array.from(el.childNodes).filter(
-      (node) => node.nodeType === 3
-    );
-  
-    textNodes.forEach((node) => {
-      nodesMap.set(node, node.nodeValue);
-    });
-  
-    const evaluate = () => {
-      try {
-        
-        textNodes.forEach((textNode) => {
-          const originalValue = nodesMap.get(textNode);
-          const regex = /@html\((.*?)\)/g;
-          let match;
-          let hasHtml = false;
-          const fragments = [];
-  
-          let lastIndex = 0;
-  
-          while ((match = regex.exec(originalValue))) {
-            const before = originalValue.slice(lastIndex, match.index);
-            if (before) fragments.push(document.createTextNode(before));
-  
-            let expression = match[1];
-            let htmlString = '';
-            
-            
-            try {
-              
-              htmlString = evaluateExpr(expression,context,`from text interpolation @html() - ${expression}`)
-            } catch (e) {
-              htmlString = `<span style="color:red;">[Invalid Expression]</span>`;
-            }
-  
-            const temp = document.createElement('div');
-            temp.innerHTML = htmlString;
-            fragments.push(...temp.childNodes);
-            hasHtml = true;
-  
-            lastIndex = regex.lastIndex;
-          }
-  
-          const after = originalValue.slice(lastIndex);
-          if (after) fragments.push(document.createTextNode(after));
-  
-          if (hasHtml) {
-            const parent = textNode.parentNode;
-            parent.insertBefore(document.createDocumentFragment(), textNode);
-            fragments.forEach((frag) => parent.insertBefore(frag, textNode));
-            parent.removeChild(textNode);
-          }
-        });
-      } catch (error) {
-        console.warn(`Error while evaluating innerHTML for`, el, error);
-      }
-    };
-  
-    // Helper to resolve nested properties
-    const resolvePath = (path, obj) => {
-      return path.split('.').reduce((acc, key) => acc?.[key], obj);
-    };
-  
-    evaluate();
-  };
-  
-
 /**
  * 
  * @param {PawaElement | HTMLElement} el 
  * @param {object} contexts 
  */
-const render =async (el, contexts = {}) => {
+export const render =async (el, contexts = {}) => {
+  if(el.hasAttribute('only-client')){
+    el.removeAttribute('only-client')
+    const template=el.ownerDocument.createElement('template')
+    const comment=el.ownerDocument.createComment('only-client')
+    el.replaceWith(comment)
+    template.appendChild(el)
+    comment.replaceWith(template)
+    return
+  }
+  if (el.tagName === 'HEAD') {
+    if (el.querySelector('title')) {
+      el.ownerDocument.head.querySelector('title')?.remove()
+    }
+    Array.from(el.children).forEach(child => {
+      el.ownerDocument.head.appendChild(child)
+    })
+    el.remove()
+    return
+  }
+  
     const context={
         ...contexts
     }
@@ -503,13 +555,11 @@ const render =async (el, contexts = {}) => {
         console.error(error.message,error.stack)
       }
     }
-    if(!el.hasAttribute('s-pawa-avoid')){
-      innerHtml(el,context)
-    }
+    
     PawaElement.Element(el,context)
     
      if(el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@{')) && !el._avoidPawaRender){
-        textContentHandler(el)  
+       await textContentHandler(el)  
      }
      let startAttribute=false
    const startObject={}
@@ -534,11 +584,12 @@ const render =async (el, contexts = {}) => {
     }
     if (!el._avoidPawaRender) {
       
-      el.attributes.forEach(async(attr)=>{
+      const attributes = Array.from(el.attributes);
+      for(const attr of attributes){
           if (directives[attr.name]) {
               await directives[attr.name](el,attr)  
           }else if(attr.value.includes('@{')){
-              attributeHandler(el,attr)
+            await  attributeHandler(el,attr)
           }else if (attr.name.startsWith('state-')) {
             await directives['state-'](el,attr)
           }
@@ -571,7 +622,7 @@ const render =async (el, contexts = {}) => {
           }
         }
           
-      })
+      }
       if(el.tagName === 'TEMPLATE'){
         await templates(el)
         return
@@ -589,49 +640,45 @@ const render =async (el, contexts = {}) => {
       }
     }
 if(!el._running){
-  const children = Array.from(el.children);
-  for (const child of children) {
-    await render(child, el._context);
-  }
+   const children = Array.from(el.children);
+   for(const child of children){
+     await render(child, el._context);
+   };
+  
 }
 
     el._setError()
 }
-exports.render=render
-const { If,Else,ElseIf,For,State } = require('./power.js');
+
+
 const directives={
     'if':If,
-    'else':Else,
-    'else-if':ElseIf,
     'for':For,
-    'state-':State
+    'state-':State,
+    'switch':Switch,
+    'key':Key
 }
 
-const setApp=()=>{
-
-}
-exports.startApp = async (html, context = {}, devlopment = false) => {
+export const startApp = async (html, context = {}, devlopment = false) => {
   const appContext = {
     context: context,
     stateContext: null,
   };
   isDevelopment = devlopment;
   const app = new DOMParser();
-  const { document } = parseHTML();
+  
   const body = app.parseFromString(html, 'text/html');
+  
   const div = body.firstElementChild; // Original app div
-  const root = document.createElement('div'); // New root to track transformations
-  root.appendChild(div.cloneNode(true)); // Clone to preserve original structure
+  const root = body.createElement('div'); // New root to track transformations
+  root.appendChild(div?.cloneNode(true)); // Clone to preserve original structure
 
   await store.run(appContext, async () => {
     await render(root.firstElementChild, context); // Render into cloned div
   });
-
-  // Ensure all async rendering is complete
-  await new Promise((resolve) => setTimeout(resolve, 0)); // Microtask queue flush
-
   return {
     element: root?.firstElementChild, // Return the transformed element
     toString: async () => root?.firstElementChild?.outerHTML, // Reflect transformed HTML
+    head:body.head.innerHTML
   };
 };
