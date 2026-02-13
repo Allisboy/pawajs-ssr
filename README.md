@@ -9,7 +9,7 @@
 
 -   **Full PawaJS Compatibility:** Renders components and templates using the same PawaJS syntax you use on the client.
 -   **Server-Side Hooks:** Supports server-side implementations of PawaJS hooks like `$state`, `useInsert`, `setContext`, and `useContext`.
--   **Built-in Directives:** Includes powerful control-flow directives like `if`, `for`, `switch`, and `key`.
+-   **Built-in Directives:** Includes powerful control-flow directives like `if`, `for-each`, `switch`, and `key`.
 -   **Automatic Hydration:** Embeds necessary data for the client-side PawaJS to "hydrate" the static HTML and make it interactive without a full re-render using pawajs-continue library.
 -   **Client-Only Escape Hatch:** Use the `only-client` attribute to prevent specific components or elements from rendering on the server.
 -   **Extensible Plugin System:** Add your own custom directives and rendering lifecycle hooks.
@@ -137,10 +137,10 @@ PawaJS SSR supports several built-in directives for declarative rendering.
 Conditionally render blocks of HTML.
 
 ```html
-<div if="user.isLoggedIn">
+<div if="user.value.isLoggedIn">
     Welcome, @{user.name}!
 </div>
-<div else-if="user.isGuest">
+<div else-if="user.value.isGuest">
     Please sign up.
 </div>
 <div else>
@@ -148,13 +148,13 @@ Conditionally render blocks of HTML.
 </div>
 ```
 
-#### `for`
+#### `for-each`
 
 Render a list of items from an array. The syntax is `item, [index] in array`.
 
 ```html
 <ul>
-    <li for="item, i in items.value">
+    <li for-each="item, i in items.value">
         @{i}: @{item.name}
     </li>
 </ul>
@@ -165,7 +165,7 @@ Render a list of items from an array. The syntax is `item, [index] in array`.
 Handle more complex conditional logic based on a value.
 
 ```html
-    <div switch="user.role" case="'admin'">
+    <div switch="user.value.role" case="'admin'">
         <p>Admin Panel</p>
     </div>
     <div case="'editor'">
@@ -182,7 +182,7 @@ Use the `@{...}` syntax to embed JavaScript expressions directly into your HTML 
 
 ```html
 <h1 class="title-@{theme.value}">@{ pageTitle.value.toUpperCase() }</h1>
-<button disabled="@{!form.isValid}">Submit</button>
+<button disabled="@{!form.value.isValid}">Submit</button>
 ```
 
 ### Components
@@ -192,8 +192,8 @@ Define reusable UI with PawaJS components. They are just functions that return a
 ```javascript
 import { RegisterComponent, html } from 'pawajs';
 
-const MyButton = ({ text }) => {
-    return html`<button class="my-btn">@{text()}</button>`;
+const MyButton = ({ children }) => {
+    return html`<button class="my-btn" -- >${children}</button>`;
 };
 
 RegisterComponent(MyButton);
@@ -202,7 +202,7 @@ RegisterComponent(MyButton);
 const App = () => {
     return html`
         <div>
-            <my-button :text="'Click Me'"></my-button>
+            <my-button>Click Me</my-button>
         </div>
     `;
 };

@@ -139,7 +139,7 @@ class PawaElement {
       }
     }
     hasForOrIf(){
-        if (this._el.getAttribute('if') || this._el.getAttribute('for') || this._el.getAttribute('else') || this._el.getAttribute('else-if')) {
+        if (this._el.getAttribute('if') || this._el.getAttribute('for-each') || this._el.getAttribute('else') || this._el.getAttribute('else-if')) {
           return true
         }else{
           return false

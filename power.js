@@ -280,8 +280,8 @@ export const For=async(el,attr)=>{
             componentAttr[attri.name]=attri.value
           }
         })
-        el._replaceResumeAttr('for',`c-for`,dirId)
-        el.removeAttribute('for')   
+        el._replaceResumeAttr('for-each',`c-for`,dirId)
+        el.removeAttribute('for-each') 
         
         // Fix: Use for...of to ensure await works correctly in SSR
         for (const [index, item] of array.entries()) {

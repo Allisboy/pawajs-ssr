@@ -64,6 +64,15 @@ const useServer=()=>{
     const appContext = store.getStore();
     if (appContext?.stateContext) {
       appContext.stateContext.serializeData = true;
+      const setServerData=(data={})=>{
+        for (const [key,value] of Object.entries(data)) {
+            if (typeof value !== 'function') {
+              appContext.stateContext.fromSerialized[key]=value
+            }
+          }
+      }
+      const getServerData=()=>appContext.stateContext.fromSerialized
+      return {setServerData,getServerData}
     }
   }catch(error){
     if(isDevelopment){
@@ -155,7 +164,7 @@ const setPawaAttribute=(...attr)=>{
     pawaAttributes.add(att)
   })
 }
-setPawaAttribute('if','else','else-if','for','ref','key')
+setPawaAttribute('if','else','else-if','for-each','ref','key')
 export const getPawaAttributes=()=>pawaAttributes
 /**
  * @typedef {{startsWith:string,fullName:string,plugin:(el:HTMLElement | PawaElement,attr:object)=>void}} AttriPlugin
@@ -269,7 +278,7 @@ const component=async (el)=>{
     const oldAppContext=getStore().stateContext
     let stateContext={}
     let appContext={
-      transportContext:oldAppContext?.transportContext || {},
+      transportContext: {},
       innerContext:el._context,
       mount:[],
       formerContext:oldAppContext,
@@ -277,8 +286,11 @@ const component=async (el)=>{
       insert:{},
       component:el._component,
       accessChild:false,
-      serializeData:null,
+      serializeData:false,
+      serialize:{},
+      fromSerialized:{}
     }
+    Object.assign(appContext._transportContext, oldAppContext._transportContext)
     Array.from(slot.children).forEach(prop =>{
       if (prop.getAttribute('prop')) {
         slots[prop.getAttribute('prop')]=()=>prop.innerHTML
@@ -286,6 +298,7 @@ const component=async (el)=>{
         console.warn('sloting props must have prop attribute')
       }
     }) 
+    const children=el._componentChildren
     const hydrate={
       children:'',
       props:{
@@ -293,13 +306,15 @@ const component=async (el)=>{
       },
       slots:{...slots},
     }
+    if (isDevelopment) {
+      hydrate.children=children
+    }
     const id=pawaGenerateId(10)
-    const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
+    const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g, '-');
 const comment = document.createComment(`component+${id}`);
 const endComment=document.createComment(`end component+${id}+${el._componentName}`)
     el.replaceWith(endComment)
     endComment.parentElement.insertBefore(comment,endComment)
-    const children=el._componentChildren
     /**
      * @type {import('./pawaComponent.js').default}
      */
@@ -371,11 +386,15 @@ appContext.component._prop={children,...el._props,...slots}
           }
         }
 
-        if (appContext.accessChild) {
-          hydrate.children=children.trim()
-        }
-        if (appContext.serializeData) {
-          hydrate.insert=appContext.insert
+        
+        hydrate.data=null
+        if (appContext.serializeData) { // get serialized data 
+          for (const [key,value] of Object.entries(appContext.fromSerialized)) {
+            if (typeof value !== 'function') {
+              appContext.serialize[key]=value
+            }
+          }
+          hydrate.data=appContext.serialize
         }
         hydrate.context=[]
           for (const [key] of Object.entries(appContext.insert)) {
@@ -653,7 +672,7 @@ if(!el._running){
 
 const directives={
     'if':If,
-    'for':For,
+    'for-each':For,
     'state-':State,
     'switch':Switch,
     'key':Key
