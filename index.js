@@ -290,7 +290,7 @@ const component=async (el)=>{
       serialize:{},
       fromSerialized:{}
     }
-    Object.assign(appContext._transportContext, oldAppContext._transportContext)
+    Object.assign(appContext.transportContext, oldAppContext?.transportContext || {})
     Array.from(slot.children).forEach(prop =>{
       if (prop.getAttribute('prop')) {
         slots[prop.getAttribute('prop')]=()=>prop.innerHTML

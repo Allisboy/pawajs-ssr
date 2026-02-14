@@ -69,18 +69,9 @@ export const processNode = (node, itemContext) => {
   if (typeof itemContext === 'number') {
     return
   }
-  
-  if (node.nodeType === 3) { // Text node
-    const text = node.textContent
-    const newText = text.replace(/{{(.+?)}}/g, (match, exp) => {
-      // Use the cached expression evaluator for performance
-      const result = evaluateExpr(exp, itemContext, `in processNode for text: ${exp}`);
-      return result !== null ? String(result) : match;
-    })
-    //console.log(newText)
-    node.textContent = newText
-  } else if (node.attributes) {
+   if (node.attributes) {
     Array.from(node.attributes).forEach(attr => {
+      if (attr.name !== 'for-key') return
       const newValue = attr.value.replace(/{{(.+?)}}/g, (match, exp) => {
         // Use the cached expression evaluator for performance
         const result = evaluateExpr(exp, itemContext, `in processNode for attribute ${attr.name}: ${exp}`);
@@ -89,9 +80,6 @@ export const processNode = (node, itemContext) => {
       attr.value = newValue
     })
   }
-  Array.from(node.childNodes).forEach((n) => {
-    processNode(n, itemContext)
-  })
 }
 
 export const extractAtExpressions=(template) =>{
