@@ -112,6 +112,7 @@ const $state=(initialValue)=>{
     if(res instanceof Promise){
      state.async=true
      state.failed=false
+     state.retry=()=>{}
      
     }else{
       state.value=initialValue()
@@ -291,24 +292,25 @@ const component=async (el)=>{
       fromSerialized:{}
     }
     Object.assign(appContext.transportContext, oldAppContext?.transportContext || {})
+    const slotHydrates={}
     Array.from(slot.children).forEach(prop =>{
       if (prop.getAttribute('prop')) {
-        slots[prop.getAttribute('prop')]=()=>prop.innerHTML
+        const html=prop.innerHTML
+        slots[prop.getAttribute('prop')]=()=>html
+        slotHydrates[prop.getAttribute('prop')]=html
       }else{
         console.warn('sloting props must have prop attribute')
       }
     }) 
     const children=el._componentChildren
     const hydrate={
-      children:'',
+      children:children,
       props:{
         ...el._hydrateProps,
       },
-      slots:{...slots},
+      slots:{...slotHydrates},
     }
-    if (isDevelopment) {
-      hydrate.children=children
-    }
+    
     const id=pawaGenerateId(10)
     const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g, '-');
 const comment = document.createComment(`component+${id}`);
@@ -342,7 +344,7 @@ appContext.component._prop={children,...el._props,...slots}
             try {
             await fn(stateContext,app)
             } catch (error) {
-              console.error(`Error in beforeCall for ${el._componentName}:`, error.message)
+              console.error(`Error in beforeCall for ${el._componentName}:`, error.message,error.stack)
             }
           } 
       
@@ -421,7 +423,7 @@ appContext.component._prop={children,...el._props,...slots}
         })
         store.getStore().stateContext=appContext.formerContext
          } catch (error) {
-    console.log(error.message,error.stack);
+    console.log(error.message,error.stack,`at ${el.tagName} component`);
     
    }
 }
@@ -481,6 +483,9 @@ const textContentHandler = async(el) => {
             el._context,
             `from text interpolation @{} - ${expression} at ${currentHtmlString}`
           );
+          if (expression === '') {
+            return
+          }
           value = value.replace(fullMatch, String(func));
         });
         
@@ -488,7 +493,7 @@ const textContentHandler = async(el) => {
       });
     } catch (error) {
       console.warn(`error at ${el._template} textcontent`);
-      console.error(error.message, error.stack);
+      console.error(error.message, error.stack,`error at ${el._template} textcontent`);
     }
   };
   

@@ -10,7 +10,7 @@
 -   **Full PawaJS Compatibility:** Renders components and templates using the same PawaJS syntax you use on the client.
 -   **Server-Side Hooks:** Supports server-side implementations of PawaJS hooks like `$state`, `useInsert`, `setContext`, and `useContext`.
 -   **Built-in Directives:** Includes powerful control-flow directives like `if`, `for-each`, `switch`, and `key`.
--   **Automatic Hydration:** Embeds necessary data for the client-side PawaJS to "hydrate" the static HTML and make it interactive without a full re-render using pawajs-continue library.
+-   **Automatic Hydration:** Embeds necessary data for the client-side PawaJS to "hydrate" the static HTML and make it interactive without a full re-render using [PawaJS-Continue](https://github.com/Allisboy/pawajs-continue) library.
 -   **Client-Only Escape Hatch:** Use the `only-client` attribute to prevent specific components or elements from rendering on the server.
 -   **Extensible Plugin System:** Add your own custom directives and rendering lifecycle hooks.
 
@@ -28,6 +28,8 @@ Here's a basic example of how to render a PawaJS component on the server using a
 
 ```javascript
 import { RegisterComponent, $state, useInsert, html } from 'pawajs';
+import {isServer} from 'pawajs/server'
+import { initiateResumer } from "pawajs-continue";
 
 const App = () => {
     const message = $state('World');
@@ -40,8 +42,14 @@ const App = () => {
         </div>
     `;
 };
-
-export const Main=()=>{
+RegisterComponent(App);
+```
+**2. A server file (`main.js`)
+```javascript
+import { startApp } from "pawajs-ssr";
+import { App } from "./app.js";
+import {App} from "./app.js"
+ const Entry=()=>{
     return html`
     <div>
         <app></app>
@@ -49,10 +57,17 @@ export const Main=()=>{
     `
 }
 
-RegisterComponent(App);
+export const main=async({url})=>{
+    const template=Entry()
+    const {toString,head}=await startApp(template,{url},true)//template string, context for server , true - for development
+    const html=await toString()
+    return {html,head}
+}
+
+
 ```
 
-**2. Create your Server Entrypoint (`server.js`)**
+**3. Create your Server Entrypoint (`server.js`)**
 
 ```javascript
 import express from 'express';
@@ -65,14 +80,8 @@ const port = 3000;
 app.get('/', async (req, res) => {
     try {
         // Get the component's HTML string
-        const componentHtml = Main();
-
-        // Render it with PawaJS SSR
-        const { toString, head } = await startApp(
-            componentHtml,
-            { /* initial context */ },
-            true // development mode
-        );
+        const {html,head} =async Main({url:req.origin});
+        const 
 
         const renderedHtml = await toString();
 
@@ -86,9 +95,9 @@ app.get('/', async (req, res) => {
                 ${head}
             </head>
             <body>
-                <div id="app">${renderedHtml}</div>
+                <div id="app">${html}</div>
                 <!-- Add client-side script for continuity using pawajs-continue library-->
-                <script src="/client.js" type="module"></script>
+                <script src="/app.js" type="module"></script>
             </body>
             </html>
         `;
@@ -118,12 +127,14 @@ import { App } from './src/app.js';
 // Register the same components used on the server
 RegisterComponent(App);
 
-// Initialize the resumer for hydration
-initiateResumer();
-
-// Start PawaJS on the client to continue the app know as Continue Rendering Model(CRM)
-const appElement = document.getElementById('app');
-pawaStartApp(appElement);
+if(!isServer()){
+    // Initialize the resumer for hydration
+    initiateResumer();
+    
+    // Start PawaJS on the client to continue the app know as Continue Rendering Model(CRM)
+    const appElement = document.getElementById('app');
+    pawaStartApp(appElement);
+}
 ```
 
 ## Core Concepts

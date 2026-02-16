@@ -117,7 +117,8 @@ let latestChain
 export const Switch = async(el, attr) => {
   if (el._running) return;
   el._running = true;
-
+try {
+  
   const nextSiblings = el.nextElementSibling || null;
   const cases =el.getAttribute('case')
   const chained=[{
@@ -230,6 +231,9 @@ const switchFunc=evaluateExpr(attr.value,el._context,`at switch directive ${attr
     comment.parentElement.insertBefore(template, endComment);
     // No element rendered
   }
+} catch (error) {
+  console.log(error.message,error.stack,`at switch directive ${el._template}`)
+}
 };
 
 export const For=async(el,attr)=>{
@@ -322,7 +326,7 @@ export const For=async(el,attr)=>{
     }
     
     } catch (error) {
-      console.error(error.message,error.stack)
+      console.error(error.message,error.stack,`at for directive ${el._template}`)
     }
 }
 
@@ -339,7 +343,7 @@ export const State=async(el,attr)=>{
     el._context[name]={value:result}
     el.removeAttribute(attr.name)
   } catch (error) {
-    console.log(error.message,error.stack)
+    console.log(error.message,error.stack,`at ${el._template} from state`)
   }
   
 }
@@ -377,6 +381,6 @@ export const Key=async(el,attr)=>{
      endComment.parentElement.insertBefore(newElement,endComment)
      await render(newElement,el._context)
 }catch(error){
-  console.error(error.message,error.stack)
+  console.error(error.message,error.stack,`at key ${el._template}`)
 }
 }
