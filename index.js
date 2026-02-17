@@ -345,6 +345,13 @@ appContext.component._prop={children,...el._props,...slots}
             await fn(stateContext,app)
             } catch (error) {
               console.error(`Error in beforeCall for ${el._componentName}:`, error.message,error.stack)
+               __pawaDev.setError({ 
+                    el:el, 
+                    msg:`from  compoBeforeCall${el._componentName}:`+ error.message + error.stack, 
+                    directives:'plugin', 
+                    stack:error.stack, 
+                    template:el?._template, 
+                 })
             }
           } 
       
@@ -353,12 +360,20 @@ appContext.component._prop={children,...el._props,...slots}
     let compo=""
     try{
       if(done){
+      
         store.getStore().stateContext=appContext
         compo=await component.component(app)
       }
 
     }catch(error){
       console.error(`error from PawaComponent.${appContext.component._name}`,error.message,error.stack)
+             __pawaDev.setError({ 
+                    el:el, 
+                    msg:`error from PawaComponent.${appContext.component._name}`+ error.message + error.stack, 
+                    directives:el.tagName, 
+                    stack:error.stack, 
+                    template:el?._template, 
+                 })
     }
     if (appContext?.insert){
       Object.assign(el._context,appContext.insert)
@@ -424,7 +439,13 @@ appContext.component._prop={children,...el._props,...slots}
         store.getStore().stateContext=appContext.formerContext
          } catch (error) {
     console.log(error.message,error.stack,`at ${el.tagName} component`);
-    
+    __pawaDev.setError({ 
+                    el:el, 
+                    msg:`from  ${el.tagName} component`, 
+                    directives:'component', 
+                    stack:error.stack, 
+                    template:el?._template, 
+                 })
    }
 }
 const templates=async(el,context)=>{
@@ -478,7 +499,7 @@ const textContentHandler = async(el) => {
 
         const expressions = extractAtExpressions(value);
         expressions.forEach(({ fullMatch, expression }) => {
-          const func = evaluateExpr(
+          const func = el._evaluateExpr(
             expression,
             el._context,
             `from text interpolation @{} - ${expression} at ${currentHtmlString}`
@@ -494,6 +515,13 @@ const textContentHandler = async(el) => {
     } catch (error) {
       console.warn(`error at ${el._template} textcontent`);
       console.error(error.message, error.stack,`error at ${el._template} textcontent`);
+      __pawaDev.setError({ 
+           el:el, 
+           msg:`Error from textHandler`+ error.message + error.stack, 
+           directives:el.tagName, 
+           stack:error.stack, 
+           template:el?._template, 
+        }) 
     }
   };
   
@@ -536,6 +564,13 @@ const attributeHandler =async (el, attr) => {
       }
     } catch (error) {
       console.log(error.message, error.stack);
+      __pawaDev.setError({ 
+           el:el, 
+           msg:`error from Attribute Handler`+ error.message + error.stack, 
+           directives:'Attribute Handler', 
+           stack:error.stack, 
+           template:el?._template, 
+        })
     }
   };
 

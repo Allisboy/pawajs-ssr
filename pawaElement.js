@@ -4,6 +4,7 @@ import {components} from 'pawajs'
 import PawaComponent from "./pawaComponent.js"
 import { evaluateExpr, splitAndAdd,replaceTemplateOperators } from "./utils.js"
 
+const expressionCache = new Map();
 // changed the hydrateProps 
 
 class PawaElement {
@@ -37,6 +38,7 @@ class PawaElement {
         this._setError=this.setError
         this._hydrateProps={}
         this._resumeAttr=''
+        this._evaluateExpr=this.evaluateExpr
         this._reArrangeAttri=this.reArrange
         this._replaceResumeAttr=this.replaceResumeAttr
         this._setResumeAttr=this.setResumeAttr
@@ -117,7 +119,7 @@ class PawaElement {
         array[index]=newName
         const toString=array.join(';')
         this._el.setAttribute('p:c',toString)
-        
+        this._resumeAttr=toString
       }else{
         ele.setAttribute(newName,value)
         ele.setAttribute('p:c',`${newName};`)
@@ -172,14 +174,14 @@ class PawaElement {
       createError({message,stack}){
         this._error.push({message,stack})
       }
-      //set Component props
+     //set Component props
       setProps(){
         if (this._componentName) {
          const allServerAttr=getPawaAttributes()
           this._el.attributes.forEach(attr=>{
-            if(!allServerAttr.has(attr.name)){
+            if(!allServerAttr.has(attr.name) ){
               if ( !attr.name.startsWith(':')) {
-                if( attr.name.startsWith('c-') || attr.name.startsWith('p:c')) return
+                if( attr.name.startsWith('c-') || attr.name.startsWith('p:c') || attr.name.startsWith('state-')) return
                 let name=''
                 if (attr.name.startsWith('-')) {
                   name=attr.name.slice(1)
@@ -192,7 +194,7 @@ class PawaElement {
                 this._hydrateProps[attr.name.slice(1)]=attr.value
                 if(attr.value === '') attr.value=true;
                 try {
-                  const func = evaluateExpr(`()=>{
+                  const func = this.evaluateExpr(`()=>{
                   const prop= ${replaceTemplateOperators(attr.value)};
                   if(prop === '')return prop
                   return prop
@@ -202,12 +204,47 @@ class PawaElement {
                 this._props[name]=func
                 } catch (error) {
                   console.log(error.message,error.stack)
-                  this._createError({message:error.message,stack:error.stack})
+                __pawaDev.setError({ 
+                    el:this._el, 
+                    msg:`errors while setting props at runtime ${error.message}`, 
+                    directives:'setting props', 
+                    stack:error.stack, 
+                    template:el?._template, 
+                 })
                 }
               }
             }
           })
         }
       }
+evaluateExpr(expr, context = {},error){
+  try {
+    const keys = Object.keys(context);
+    // Create a cache key based on the expression and the available context keys
+    // We sort keys to ensure consistent cache hits regardless of key order
+    const cacheKey = expr + '|||' + keys.sort().join(',');
+
+    let func = expressionCache.get(cacheKey);
+    if (!func) {
+      func = new Function(...keys, `
+        const require=null
+        return ${expr}`);
+      expressionCache.set(cacheKey, func);
+    }
+
+    const values = keys.map((key) => context[key]);
+    return func(...values);
+  } catch (err) {
+    console.error(`Evaluation failed for: ${expr}`,error,err.message,err.stack);
+    __pawaDev.setError({ 
+         el:this._el, 
+         msg:`${error} ${err.message}`, 
+         directives:'expression', 
+         stack:err.stack, 
+         template:this._el?._template, 
+      })
+    return null;
+  }
+};
 }
 export default PawaElement

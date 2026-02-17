@@ -43,7 +43,7 @@ let current
 let latestChain
   chained.forEach((item)=>{
        if(item.condition === 'else' || current)return
-       const result = evaluateExpr(item.exp, el._context,`at condition  directives check - ${item.exp}`);
+       const result = el._evaluateExpr(item.exp, el._context,`at condition  directives check - ${item.exp} at ${item.element.toString()}`);
        current=result
        if (current) {
             latestChain={
@@ -117,8 +117,7 @@ let latestChain
 export const Switch = async(el, attr) => {
   if (el._running) return;
   el._running = true;
-try {
-  
+
   const nextSiblings = el.nextElementSibling || null;
   const cases =el.getAttribute('case')
   const chained=[{
@@ -156,10 +155,10 @@ try {
 let func=new Map()
 let current
 let latestChain
-const switchFunc=evaluateExpr(attr.value,el._context,`at switch directive ${attr.value}`)
+const switchFunc=el._evaluateExpr(attr.value,el._context,`at switch directive ${attr.value}`)
   chained.forEach((item)=>{
        if(item.condition === 'default' || current)return
-       const result = switchFunc === evaluateExpr(item.exp, el._context,`at condition  directives check - ${item.exp}`);
+       const result = switchFunc === el._evaluateExpr(item.exp, el._context,`at condition  directives check case - ${item.exp} ${item.element.toString()}`);
        current=result
        if (current || item.condition === 'default') {
             latestChain={
@@ -231,9 +230,6 @@ const switchFunc=evaluateExpr(attr.value,el._context,`at switch directive ${attr
     comment.parentElement.insertBefore(template, endComment);
     // No element rendered
   }
-} catch (error) {
-  console.log(error.message,error.stack,`at switch directive ${el._template}`)
-}
 };
 
 export const For=async(el,attr)=>{
@@ -258,7 +254,7 @@ export const For=async(el,attr)=>{
     const arrayItems=itemPart.split(',')
     const arrayItem=arrayItems[0].trim()
     const indexes=arrayItems[1]
-    const array=evaluateExpr(arrayName,el._context,`at for directives check - ${attr.value}`)
+    const array=el._evaluateExpr(arrayName,el._context,`at for directives check - ${attr.value}`)
     const copyElement=el.cloneNode(true)
     const store=[]
     Array.from(copyElement.attributes).forEach(at=>{
@@ -326,7 +322,14 @@ export const For=async(el,attr)=>{
     }
     
     } catch (error) {
-      console.error(error.message,error.stack,`at for directive ${el._template}`)
+      console.error(error.message,error.stack)
+       __pawaDev.setError({ 
+           el:el, 
+           msg:`error from for-each ${attr.value}`+ error.message + error.stack, 
+           directives:'for-each', 
+           stack:error.stack, 
+           template:el?._template, 
+        })
     }
 }
 
@@ -336,14 +339,21 @@ export const State=async(el,attr)=>{
   }
   try {
 
-    const result=evaluateExpr(attr.value,el._context,`at state directive ${attr.name}=${attr.value}`)
     const name=attr.name.split('-')[1]
     el._replaceResumeAttr(attr.name,`c-$-${name}`,attr.value)
+    el.removeAttribute(attr.name)
+    const result=el._evaluateExpr(attr.value,el._context,`at state directive ${attr.name}=${attr.value}`)
     // el.setAttribute(`resume-state-${name}`,attr.value)
     el._context[name]={value:result}
-    el.removeAttribute(attr.name)
   } catch (error) {
-    console.log(error.message,error.stack,`at ${el._template} from state`)
+    console.log(error.message,error.stack)
+     __pawaDev.setError({ 
+           el:el, 
+           msg:`error from state ${attr.name} : ${attr.value}`+ error.message + error.stack, 
+           directives:el.tagName, 
+           stack:error.stack, 
+           template:el?._template, 
+        })
   }
   
 }
@@ -371,7 +381,7 @@ export const Key=async(el,attr)=>{
     template.appendChild(clone)
     el.replaceWith(endComment)
     endComment.parentElement.insertBefore(comment,endComment)
-    const func=evaluateExpr(attr.value,el._context,`error at Key - ${attr.name} = ${attr.value}`,el)
+    const func=el._evaluateExpr(attr.value,el._context,`error at Key - ${attr.name} = ${attr.value}`)
     endComment.parentElement.insertBefore(template,endComment)
     comment.data=`key(${func})@-$@-$@${dirId}`
     endComment.data=`key(${func})@-$@-$@${dirId}`
@@ -381,6 +391,13 @@ export const Key=async(el,attr)=>{
      endComment.parentElement.insertBefore(newElement,endComment)
      await render(newElement,el._context)
 }catch(error){
-  console.error(error.message,error.stack,`at key ${el._template}`)
+  console.error(error.message,error.stack)
+   __pawaDev.setError({ 
+       el:el, 
+       msg:`error from Key at ${attr.value}`+ error.message + error.stack, 
+       directives:el.tagName, 
+       stack:error.stack, 
+       template:el?._template, 
+    })
 }
 }
