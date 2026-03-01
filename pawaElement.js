@@ -200,7 +200,10 @@ class PawaElement {
                   return prop
                   }
                   `,this._context,`setting props at ${attr.name} - ${attr.value} : ${this._template}`)
-                const name=attr.name.slice(1)
+                let name=attr.name.slice(1)
+                if(name.includes('-')){
+                     name=name.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+                }
                 this._props[name]=func
                 } catch (error) {
                   console.log(error.message,error.stack)

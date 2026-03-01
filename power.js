@@ -1,7 +1,7 @@
 import {render} from "./index.js";
 import { convertToNumber,evaluateExpr, processNode, reArrangeAttri, pawaGenerateId }  from "./utils.js";
 import {parseHTML}  from "linkedom"
-export const If = async(el, attr) => {
+export const If = async(el, attr,stream) => {
   if (el._running) return;
   el._running = true;
 
@@ -68,6 +68,7 @@ let latestChain
   const store=document.createElement('template')
   chained.forEach((item,index) =>{
     const clone=item.element.cloneNode(true)
+    clone._avoidPawaRender = true
     if (index === 0) {
         Array.from(clone.attributes).forEach(at => {
         if (at.name.startsWith('c-')) {
@@ -103,18 +104,23 @@ let latestChain
     newElement.removeAttribute(latestChain.condition)
     newElement.setAttribute('pawa-same',true)
     endComment.parentElement.insertBefore(comment,endComment)
+    stream(`<!--${comment.data}-->`)
     store.setAttribute('p:store-if',id)
     store.setAttribute('p:store','')
     comment.parentElement.insertBefore(store,endComment)
+    stream(store.outerHTML)
     comment.parentElement.insertBefore(newElement,endComment)
-    await render(newElement, el._context);
+    await render(newElement, el._context,stream);
+    stream(`<!--${endComment.data}-->`)
   } else {
     
     template.setAttribute('pawa-render',true)
     endComment.replaceWith(template);
+    stream(`${template.outerHTML}`)
+    // await render(template, el._context,stream);
   }
 };
-export const Switch = async(el, attr) => {
+export const Switch = async(el, attr,stream) => {
   if (el._running) return;
   el._running = true;
 
@@ -184,6 +190,7 @@ const switchFunc=el._evaluateExpr(attr.value,el._context,`at switch directive ${
         let index=0
         chained.forEach(item =>{
           const clone=item.element.cloneNode(true)
+          clone._avoidPawaRender = true
           if (index === 0) {
         Array.from(clone.attributes).forEach(at => {
         if (at.name.startsWith('c-')) {
@@ -220,19 +227,26 @@ const switchFunc=el._evaluateExpr(attr.value,el._context,`at switch directive ${
       store.setAttribute('p:store-switch',id)
       store.setAttribute('p:store','')
       endComment.parentElement.insertBefore(comment,endComment)
-      comment.parentElement.insertBefore(template,endComment)
+      stream(`<!--${comment.data}-->`)
+      comment.parentElement.insertBefore(store,endComment)
+      stream(store.outerHTML)
     comment.parentElement.insertBefore(newElement,endComment)
-    await render(newElement, el._context);
+    await render(newElement, el._context,stream);
+    stream(`<!--${endComment.data}-->`)
   } else {
     // If no case matches and no default, we just leave the comments
     template.setAttribute('pawa-render',true)
     endComment.parentElement.insertBefore(comment, endComment);
+    stream(`${template.outerHTML}`)
+    // stream(`<!--${comment.data}-->`)
     comment.parentElement.insertBefore(template, endComment);
+    // await render(template, el._context,stream);
     // No element rendered
+    // stream(`<!--${endComment.data}-->`)
   }
 };
 
-export const For=async(el,attr)=>{
+export const For=async(el,attr,stream)=>{
     if(el._running){
       return
     }
@@ -246,7 +260,6 @@ export const For=async(el,attr)=>{
     el.replaceWith(endComment)
     const hasKey=el.getAttribute('for-key')
     endComment.parentElement.insertBefore(comment,endComment)
-    
     // More robust split using regex to find the last occurrence of ' in ' or handle simple cases
     const match = value.match(/^(.*?) in (.*)$/);
     if (!match) throw new Error(`Invalid for loop syntax: ${value}`);
@@ -265,16 +278,20 @@ export const For=async(el,attr)=>{
     })
     
     const template=document.createElement('template')
-    template.appendChild(copyElement.cloneNode(true))
+    const storeClone = copyElement.cloneNode(true)
+    storeClone._avoidPawaRender = true
+    template.appendChild(storeClone)
     store.forEach(at=>{
       copyElement.setAttribute(at.name,at.value)
     })
     const componentAttr={}
     if(Array.isArray(array)){
       if (array.length > 0) {
+        stream(`<!--${comment.data}-->`)
         template.setAttribute('p:store-for',dirId)
         template.setAttribute('p:store','')
         endComment.parentElement.insertBefore(template,endComment)
+        stream(template.outerHTML)
         el.attributes.forEach(attri =>{
           if(attri.name.startsWith('c-')){
             componentAttr[attri.name]=attri.value
@@ -309,12 +326,15 @@ export const For=async(el,attr)=>{
             const endKeyComment=document.createComment(`endForKey@-$@-$@${dirId}@-$@-$@${key  || index}`)
             endComment.parentElement.insertBefore(endKeyComment,endComment)
             endKeyComment.parentElement.insertBefore(keyComment,endKeyComment)
+            stream(`<!--${keyComment.data}-->`)
             endKeyComment.parentElement.insertBefore(newElement,endKeyComment)
-            await render(newElement,itemContext)
+            await render(newElement,itemContext,stream)
+            stream(`<!--${endKeyComment.data}-->`)
         }
-
+        stream(`<!--${endComment.data}-->`)
       }else{
         template.setAttribute('pawa-render',true)
+        stream(`<template pawa-render="true">${el.outerHTML}</template>`)
         template.appendChild(el)
         comment.replaceWith(template)
         endComment.remove()
@@ -358,7 +378,7 @@ export const State=async(el,attr)=>{
   
 }
 
-export const Key=async(el,attr)=>{
+export const Key=async(el,attr,stream)=>{
   if(el._running){
       return
     }
@@ -370,6 +390,7 @@ export const Key=async(el,attr)=>{
     const comment=document.createComment(`key`)
     const endComment=document.createComment(`key`)
     const clone=el.cloneNode(true)
+    clone._avoidPawaRender = true
     const template=document.createElement('template')
     template.setAttribute('p:store-key',dirId)
     template.setAttribute('p:store','')
@@ -385,11 +406,14 @@ export const Key=async(el,attr)=>{
     endComment.parentElement.insertBefore(template,endComment)
     comment.data=`key(${func})@-$@-$@${dirId}`
     endComment.data=`key(${func})@-$@-$@${dirId}`
+    stream(`<!--${comment.data}-->`)
+    stream(template.outerHTML)
     el._replaceResumeAttr('key',`c-key-${dirId}`,typeof func === 'string'?`'${func}'`:func)
     el.removeAttribute(attr.name)
     const newElement=el.cloneNode(true)
      endComment.parentElement.insertBefore(newElement,endComment)
-     await render(newElement,el._context)
+     await render(newElement,el._context,stream)
+     stream(`<!--${endComment.data}-->`)
 }catch(error){
   console.error(error.message,error.stack)
    __pawaDev.setError({ 
