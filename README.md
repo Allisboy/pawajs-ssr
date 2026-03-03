@@ -5,6 +5,8 @@
 
 **PawaJS SSR** is a powerful library for Server-Side Rendering (SSR) your [PawaJS](https://github.com/Allisboy/pawajs) applications. It allows you to execute PawaJS components, directives, and data-binding on a Node.js server, delivering fully-rendered HTML to the client. This improves initial page load performance and is essential for SEO.
 
+🌐 **Website:** [pawajs.vercel.app](https://pawajs.vercel.app)
+
 ## Key Features
 
 -   **Full PawaJS Compatibility:** Renders components and templates using the same PawaJS syntax you use on the client.
@@ -80,10 +82,7 @@ const port = 3000;
 app.get('/', async (req, res) => {
     try {
         // Get the component's HTML string
-        const {html,head} =async Main({url:req.origin});
-        const 
-
-        const renderedHtml = await toString();
+        const { html, head } = await Main({ url: req.url });
 
         // Inject into a full HTML document
         const finalHtml = `
@@ -254,6 +253,15 @@ The main function to start the SSR process.
 **Returns:** An object with:
 -   `toString()`: An async function that returns the fully rendered HTML string.
 -   `head`: A string containing the content of the `<head>` tag if it was present in the input HTML.
+
+## Ecosystem
+
+*   **pawajs**: The core library.
+*   **pawajs-continue**: For client-side hydration.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 

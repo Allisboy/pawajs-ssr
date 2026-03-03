@@ -1,4 +1,4 @@
-import {getServerInstance, setServer} from '../src/pawajs/server.js'
+import {getServerInstance, setServer} from 'pawajs/server.js'
 import { DOMParser,parseHTML, HTMLElement} from 'linkedom'
 import PawaComponent from './pawaComponent.js'
 import { propsValidator, evaluateExpr,extractAtExpressions, reArrangeAttri,resumeAttribute, pawaGenerateId } from './utils.js'
