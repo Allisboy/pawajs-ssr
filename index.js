@@ -132,23 +132,65 @@ const useInnerContext=()=>{
   }
 }
 
-const $state=(initialValue)=>{
-  const state={value:null}
-  if(typeof initialValue === 'function'){
-    const res=initialValue()
-    if(res instanceof Promise){
-     state.async=true
-     state.failed=false
-     state.retry=()=>{}
-     
-    }else{
-      state.value=initialValue()
+
+const $state = (initialValue) => {
+  const id=crypto.randomUUID()
+  const state = { value: null ,id};
+
+  if (typeof initialValue === 'function') {
+    const res = initialValue();
+    if (res instanceof Promise) {
+      state.async = true;
+      state.failed = false;
+      state.retry = () => {};
+    } else {
+      state.value = res;
     }
-  } else{
-    state.value=initialValue
-    return state
+  } else {
+    state.value = initialValue;
   }
-}
+
+  const initLocalState = (target, ctx) => {
+    const newState = { ...target };
+    const currentValue = target.value;
+
+    if (currentValue && typeof currentValue === 'object') {
+      try {
+        newState.value = structuredClone(currentValue);
+      } catch (e) {
+        newState.value = Array.isArray(currentValue) ? [...currentValue] : { ...currentValue };
+      }
+    } else {
+      newState.value = currentValue;
+    }
+
+    ctx.states.set(target, newState);
+  };
+
+  return new Proxy(state, {
+    get(target, prop, receiver) {
+      const ctx = store.getStore();
+      if (ctx) {
+        if (!ctx.states) ctx.states = new Map();
+        if (!ctx.states.has(target)) initLocalState(target, ctx);
+        return ctx.states.get(target)[prop];
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    set(target, prop, value, receiver) {
+      const ctx = store.getStore();
+      if (ctx) {
+        if (!ctx.states) ctx.states = new Map();
+        if (!ctx.states.has(target)) initLocalState(target, ctx);
+        // Directly set the property on the request-local state object.
+        ctx.states.get(target)[prop] = value;
+        return true; // The set trap must return a boolean.
+      }
+      return Reflect.set(target, prop, value, receiver);
+    }
+  });
+};
+
 setServer({
   useContext,
   useInnerContext,
@@ -846,12 +888,29 @@ const attributeHandler =async (el, attr) => {
     string.forEach(v => singleElement.add(v))
   }
   setSingle('img','br')
+  const partlyPawajsDirective=new Set()
+  export const addToPartlyDirective=(...partly)=>{
+    partly.forEach((v)=>{
+      partlyPawajsDirective.add(v)
+    })
+  }
+  addToPartlyDirective('else','else-if','case')
+  const checkIfRemove=(el)=>{
+    for (const v of partlyPawajsDirective) {
+      if(el.hasAttribute(v)) return true
+    }
+    return false
+  } 
 /**
  * 
  * @param {PawaElement | HTMLElement} el 
  * @param {object} contexts 
  */
 export const render =async (el, contexts = {},stream) => {
+  
+  if (checkIfRemove(el) && !el.hasAttribute('switch')) {
+    return
+  }
   const isStream=store.getStore().stream
   if(el.hasAttribute('only-client')){
     el.removeAttribute('only-client')
@@ -892,17 +951,17 @@ export const render =async (el, contexts = {},stream) => {
    const startObject={}
    //get startsWith plugin
    if (!el._avoidPawaRender) {
-    startsWithSet.forEach( starts=>{
-    
-    el._attributes.forEach(attr =>{
-      if(attr.name.startsWith(starts)){
-        startAttribute=true
-        startObject[attr.name]=starts
-      }
-    })
-   })
-   }
-     for (const fn of renderAfterPawa) {
+     startsWithSet.forEach( starts=>{
+       
+       el._attributes.forEach(attr =>{
+         if(attr.name.startsWith(starts)){
+           startAttribute=true
+           startObject[attr.name]=starts
+          }
+        })
+      })
+    }
+    for (const fn of renderAfterPawa) {
       try {
         await fn(el)
       } catch (error) {
@@ -913,14 +972,14 @@ export const render =async (el, contexts = {},stream) => {
       
       const attributes = Array.from(el.attributes);
       for(const attr of attributes){
-          if (directives[attr.name]) {
-              await directives[attr.name](el,attr,stream)  
-          }else if(attr.value.includes('@{')){
-            await  attributeHandler(el,attr)
-          }else if (attr.name.startsWith('state-')) {
-             directives['state-'](el,attr)
-          }
-          else if(fullNamePlugin.has(attr.name)) {
+        if (directives[attr.name]) {
+          await directives[attr.name](el,attr,stream)  
+        }else if(attr.value.includes('@{')){
+          await  attributeHandler(el,attr)
+        }else if (attr.name.startsWith('state-')) {
+          directives['state-'](el,attr)
+        }
+        else if(fullNamePlugin.has(attr.name)) {
           if(externalPlugin[attr.name]){
             const plugin= externalPlugin[attr.name]
             try{
@@ -950,6 +1009,7 @@ export const render =async (el, contexts = {},stream) => {
         }
           
       }
+      // If the element is not connected and has no parent, it means it was removed (e.g. by If directive)
       if(el.tagName === 'TEMPLATE'){
         await templates(el,stream)
         return

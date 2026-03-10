@@ -17,6 +17,7 @@ export const If = async(el, attr,stream) => {
          if (nextSibling !== null) {
              if (nextSibling && nextSibling.getAttribute('else') === '' || nextSibling.getAttribute('else-if')) {
                  if (nextSibling.getAttribute('else-if')) {
+                     nextSibling.remove()
                      chained.push({
                          exp:nextSibling.getAttribute('else-if'),
                          condition:'else-if',
@@ -24,7 +25,6 @@ export const If = async(el, attr,stream) => {
                      })
                      chainMap.set(nextSibling.getAttribute('else-if'),{condition:'else-if',element:nextSibling})
                      getChained(nextSibling.nextElementSibling)
-                     nextSibling.remove()
                  }else if (nextSibling.getAttribute('else') === '') {
                      chained.push({
                          exp:'false',
