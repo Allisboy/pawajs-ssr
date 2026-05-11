@@ -13,31 +13,28 @@ export const If = async(el, attr,stream) => {
     }]
     const chainMap=new Map()
     chainMap.set(el.getAttribute('if'),{condition:'if',element:el})
-     const getChained=(nextSibling)=>{
-         if (nextSibling !== null) {
-             if (nextSibling && nextSibling.getAttribute('else') === '' || nextSibling.getAttribute('else-if')) {
-                 if (nextSibling.getAttribute('else-if')) {
-                     nextSibling.remove()
-                     chained.push({
-                         exp:nextSibling.getAttribute('else-if'),
-                         condition:'else-if',
-                         element:nextSibling
-                     })
-                     chainMap.set(nextSibling.getAttribute('else-if'),{condition:'else-if',element:nextSibling})
-                     getChained(nextSibling.nextElementSibling)
-                 }else if (nextSibling.getAttribute('else') === '') {
-                     chained.push({
-                         exp:'false',
-                         condition:'else',
-                         element:nextSibling
-                     })
-                     chainMap.set('else',{condition:'else',element:nextSibling})
-                     nextSibling.remove()
-                 }
-             }
-         }
-     }
-     getChained(nextSiblings)
+    const getChained = (sibling) => {
+        while (sibling) {
+            const next = sibling.nextElementSibling;
+            const isElseIf = sibling.hasAttribute('else-if');
+            const isElse = sibling.hasAttribute('else');
+            
+            if (isElseIf) {
+                const exp = sibling.getAttribute('else-if');
+                chained.push({ exp, condition: 'else-if', element: sibling });
+                chainMap.set(exp, { condition: 'else-if', element: sibling });
+                sibling.remove();
+            } else if (isElse) {
+                chained.push({ exp: 'false', condition: 'else', element: sibling });
+                chainMap.set('else', { condition: 'else', element: sibling });
+                sibling.remove();
+            } else {
+                break;
+            }
+            sibling = next;
+        }
+    }
+    getChained(nextSiblings)
 let func=new Map()
 let current
 let latestChain
@@ -66,24 +63,17 @@ let latestChain
   let stringHtml=''
   const template=document.createElement('template')
   const store=document.createElement('template')
-  chained.forEach((item,index) =>{
-    const clone=item.element.cloneNode(true)
-    clone._avoidPawaRender = true
-    if (index === 0) {
-        Array.from(clone.attributes).forEach(at => {
-        if (at.name.startsWith('c-')) {
-          clone.removeAttribute(at.name)
-          clone.removeAttribute('p:c')
-        }
-      });
-      // stringHtml+=clone.outerHTML
-      store.appendChild(clone)
-    }else{
-      store.appendChild(clone)
-    }
-      template.appendChild(item.element)
-      
-    })
+  chained.forEach((item) => {
+    const clone = item.element.cloneNode(true);
+    clone._avoidPawaRender = true;
+    Array.from(clone.attributes).forEach(at => {
+      if (at.name.startsWith('c-') || at.name === 'p:c') {
+        clone.removeAttribute(at.name);
+      }
+    });
+    store.appendChild(clone);
+    template.appendChild(item.element);
+  });
   const getRightElement=chainMap.get(latestChain.id)
   if (getRightElement) {
     const copyElement=getRightElement.element.cloneNode(true)
@@ -133,31 +123,28 @@ export const Switch = async(el, attr,stream) => {
     }]
     const chainMap=new Map()
     chainMap.set(el.getAttribute('case'),{condition:'case',element:el})
-     const getChained=(nextSibling)=>{
-         if (nextSibling !== null) {
-             if (nextSibling && nextSibling.getAttribute('default') === '' || nextSibling.getAttribute('case')) {
-                 if (nextSibling.getAttribute('case')) {
-                     chained.push({
-                         exp:nextSibling.getAttribute('case'),
-                         condition:'case',
-                         element:nextSibling
-                     })
-                     chainMap.set(nextSibling.getAttribute('case'),{condition:'case',element:nextSibling})
-                     getChained(nextSibling.nextElementSibling)
-                     nextSibling.remove()
-                 }else if (nextSibling.getAttribute('default') === '') {
-                     chained.push({
-                         exp:'false',
-                         condition:'default',
-                         element:nextSibling
-                     })
-                     chainMap.set('default',{condition:'default',element:nextSibling})
-                     nextSibling.remove()
-                 }
-             }
-         }
-     }
-     getChained(nextSiblings)
+    const getChained = (sibling) => {
+        while (sibling) {
+            const next = sibling.nextElementSibling;
+            const isCase = sibling.hasAttribute('case') && !sibling.hasAttribute('switch');
+            const isDefault = sibling.hasAttribute('s-default');
+
+            if (isCase) {
+                const exp = sibling.getAttribute('case');
+                chained.push({ exp, condition: 'case', element: sibling });
+                chainMap.set(exp, { condition: 'case', element: sibling });
+                sibling.remove();
+            } else if (isDefault) {
+                chained.push({ exp: 'false', condition: 'default', element: sibling });
+                chainMap.set('default', { condition: 'default', element: sibling });
+                sibling.remove();
+            } else {
+                break;
+            }
+            sibling = next;
+        }
+    }
+    getChained(nextSiblings)
 let func=new Map()
 let current
 let latestChain
@@ -187,28 +174,23 @@ const switchFunc=el._evaluateExpr(attr.value,el._context,`at switch directive ${
         let stringHtml='' 
         const template=document.createElement('template')
         const store=document.createElement('template')
-        let index=0
-        chained.forEach(item =>{
-          const clone=item.element.cloneNode(true)
-          clone._avoidPawaRender = true
-          if (index === 0) {
-        Array.from(clone.attributes).forEach(at => {
-        if (at.name.startsWith('c-')) {
-          clone.removeAttribute(at.name)
-        }
-      });
-
-      store.appendChild(clone)
-      }else{
-      store.appendChild(clone)
-      } 
-      index++
-      template.appendChild(item.element)
-        })
+        // let index=0
+        chained.forEach((item) => {
+          const clone = item.element.cloneNode(true);
+          clone._avoidPawaRender = true;
+          Array.from(clone.attributes).forEach(at => {
+            if (at.name.startsWith('c-') || at.name === 'p:c') {
+              clone.removeAttribute(at.name);
+            }
+          });
+          store.appendChild(clone);
+          template.appendChild(item.element);
+        });
         el.removeAttribute('switch')
   const getRightElement=chainMap.get(latestChain.id)
   if (getRightElement && (current || latestChain.condition === 'default')) {
     const copyElement=getRightElement.element.cloneNode(true)
+
     copyElement.attributes.forEach((att)=>{
       if(att.name.startsWith('c-')){
         copyElement.removeAttribute(att.name)
@@ -219,7 +201,7 @@ const switchFunc=el._evaluateExpr(attr.value,el._context,`at switch directive ${
       el._replaceResumeAttr(latestChain.condition,`c-sw-${id}`,latestChain.id)
        newElement = el.cloneNode(true);
       }else{
-        el._replaceResumeAttr(latestChain.condition,`c-sw-${id}`,latestChain.id,copyElement)
+        el._replaceResumeAttr(latestChain.condition === 's-default'?'s-default':latestChain.condition ,`c-sw-${id}`,latestChain.id,copyElement)
         newElement = copyElement;
       }
       newElement.removeAttribute(latestChain.condition)
@@ -274,7 +256,7 @@ export const For=async(el,attr,stream)=>{
       if (at.name.startsWith('c-')) {
         store.push(at)
         copyElement.removeAttribute(at.name)
-      }
+      }                         
     })
     
     const template=document.createElement('template')
@@ -353,6 +335,7 @@ export const For=async(el,attr,stream)=>{
     }
 }
 
+
 export const State=async(el,attr)=>{
   if (el._running) {
     return
@@ -394,9 +377,9 @@ export const Key=async(el,attr,stream)=>{
     const template=document.createElement('template')
     template.setAttribute('p:store-key',dirId)
     template.setAttribute('p:store','')
-    clone.attributes.forEach(at => {
-      if (at.name.startsWith('c-')) {
-        clone.removeAttribute(at.name)
+    Array.from(clone.attributes).forEach(at => {
+      if (at.name.startsWith('c-') || at.name === 'p:c') {
+        clone.removeAttribute(at.name);
       }
     });
     template.appendChild(clone)

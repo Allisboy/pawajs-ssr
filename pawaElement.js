@@ -1,6 +1,6 @@
 import { HTMLElement, parseHTML } from "linkedom"
 import {getPawaAttributes, getDevelopment } from "./index.js"
-import {components} from 'pawajs'
+import {components,lazyComponents} from 'pawajs/index.js'
 import PawaComponent from "./pawaComponent.js"
 import { evaluateExpr, splitAndAdd,replaceTemplateOperators } from "./utils.js"
 
@@ -32,6 +32,7 @@ class PawaElement {
         this._pawaAlready=element.hasAttribute('p:c')
         /**@type {Array<{message:string,stack:string}>} */
         this._error=[]
+        this._lazy=false
         this._running=false
         this._hasForOrIf=this.hasForOrIf
         this._createError=this.createError
@@ -55,6 +56,7 @@ class PawaElement {
         * @property{any} 
         * Object of Html Attributes for Rest Attributes
         */
+       this.checkLazy()
         this._restProps={}
         this._componentChildren=null
         this.getComponent()
@@ -77,12 +79,18 @@ class PawaElement {
         this._arrangeAttribute[value.name]=value.value
       })
     }
+    checkLazy(){
+      if (lazyComponents.has(splitAndAdd(this._el.tagName))) {
+        this._lazy=true        
+      }
+    }
     setResumeAttr(name){
       if(name.startsWith(':')) return
       this._resumeAttr+=`${name};`
-      this._el.setAttribute('p:C',this._resumeAttr)
+      this._el.setAttribute('p:c',this._resumeAttr)
     }
     pawaAttribute(){
+      const componentAllowedAttribute=['if','else-if','for-each','switch','case','key','s-default','else']
       const pawaAttr=getPawaAttributes()
       const setTextResume=()=>{
         if( this._componentName === ''&& this._el.firstElementChild === null && this._el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@{')) && !this._avoidPawaRender){
@@ -96,12 +104,20 @@ class PawaElement {
         if (this._el.hasAttribute('p:c')) {
           this._resumeAttr=this._el.getAttribute('p:c')
           this._el.attributes.forEach((value, index, array) => {
-            if(this._resumeAttr.includes(value.name) || value.name === 'p:c')return
+            if(this._resumeAttr.includes(value.name) || value.name === 'p:c'){
+              if(value.name === 'p:c' || value.name.startsWith('c-')){
+                return
+              }else{
+                const attrName = value.name;
+                this._resumeAttr = this._resumeAttr.replace(`${attrName};`, '');
+              }
+            }
             if (value.name.startsWith(':')) return
             this._resumeAttr+=`${value.name};`
           })
         }else{
               this._el.attributes.forEach((value, index, array) => {
+                if (this._componentName && !componentAllowedAttribute.includes(value.name)) return
             if(this._resumeAttr.includes(value.name) || value.name === 'p:c' )return
             if (value.name.startsWith(':')) return
             this._resumeAttr+=`${value.name};`
@@ -149,9 +165,10 @@ class PawaElement {
       }
       
       getComponent(){
-        if (components.has(splitAndAdd(this._el.tagName.toUpperCase())) && !this._client) {
+        if (components.has(splitAndAdd(this._el.tagName.toUpperCase())) && !this._client || this._lazy) {
           this._componentName=splitAndAdd(this._el.tagName.toUpperCase())
-          this._component=new PawaComponent(components.get(splitAndAdd(this._el.tagName.toUpperCase())))
+          const fakeCompo=()=>true
+          this._component=new PawaComponent(components.get(splitAndAdd(this._el.tagName.toUpperCase())),fakeCompo)
           Array.from(this._el.children).forEach(slot =>{
         
             if (slot.tagName === 'TEMPLATE' && slot.getAttribute('prop')) {
@@ -179,16 +196,57 @@ class PawaElement {
         if (this._componentName) {
          const allServerAttr=getPawaAttributes()
           this._el.attributes.forEach(attr=>{
-            if(!allServerAttr.has(attr.name) ){
+            if(!allServerAttr.has(attr.name)){
+              if (attr.name === 'svg') {
+               return
+              }
               if ( !attr.name.startsWith(':')) {
-                if( attr.name.startsWith('c-') || attr.name.startsWith('p:c') || attr.name.startsWith('state-')) return
+                  if( attr.name.startsWith('c-')||attr.name.startsWith('pawa-') |name.startsWith('p:c') || attr.name.startsWith('state-')) return
                 let name=''
                 if (attr.name.startsWith('-')) {
                   name=attr.name.slice(1)
                 }else{
                   name=attr.name
                 }
+                let hydatename
+                if(name === 'class'){
+                 hydatename=':'+'className'
+                }else if(name === 'default'){
+                 hydatename=':'+'defaultValue'
+                }else{
+                 hydatename=':'+name
+                }
+                this._hydrateProps[hydatename]=attr.value
+                const setProps=()=>{
+                  let value=attr.value
+                 if (value.includes('@{')) {
+                   const regex = /@{([^}]*)}/g;
+                 value = value.replace(regex, (match, expression) => {
+                     
+                         const res = this.evaluateExpr(expression,this._context,`evaluating props with template operators at ${attr.name} - ${attr.value} : ${this._template}`)
+                         return res
+                     
+                 });
+                 return value
+                 }else if( attr.name.startsWith('on-') || attr.name.startsWith('out-') || attr.name === 'ref'){
+                  const res=this.evaluateExpr(`(e)=>{
+                    ${attr.value}
+                  }`, this._context,`evaluating props with template operators at ${attr.name} - ${attr.value} : ${this._template}`)
+                  return res
+                 }
+                 return attr.value
+                }
+                
                 this._restProps[name]={name:name,value:attr.value}
+                name=name.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+                if (this._props[name] || name ==='class' && this._props?.className || name ==='default' && this._props.defaultValue) return
+                if (name === 'class') {
+                  this._props['className']=setProps
+                }else if(name === 'default'){
+                  this._props['defaultValue']=setProps
+                }else{
+                  this._props[name]=setProps
+                }
                 
               } else if(attr.name.startsWith(':')) {
                 this._hydrateProps[attr.name.slice(1)]=attr.value

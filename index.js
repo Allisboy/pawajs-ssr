@@ -1,7 +1,8 @@
 import {getServerInstance, setServer} from 'pawajs/server.js'
+import { pluginsMap, lazyComponents,components } from "pawajs/index.js";
 import { DOMParser,parseHTML, HTMLElement} from 'linkedom'
 import PawaComponent from './pawaComponent.js'
-import { propsValidator, evaluateExpr,extractAtExpressions, reArrangeAttri,resumeAttribute, pawaGenerateId } from './utils.js'
+import { propsValidator, evaluateExpr,extractAtExpressions, reArrangeAttri,resumeAttribute, pawaGenerateId, escapeHtml, splitAndAdd } from './utils.js'
 import {AsyncLocalStorage} from'node:async_hooks'
 import { If,For,State,Switch, Key } from'./power.js';
 import PawaElement from'./pawaElement.js'
@@ -78,6 +79,18 @@ const accessChild=()=>{
       appContext.stateContext.accessChild = true;
     }
   }catch(error){
+    if(isDevelopment){
+      console.log(error.message,'this is from component',error.stack)
+    }
+  }
+}
+const forwardProps=(props={})=>{
+  const appContext=store.getStore().stateContext
+  try {
+    if (appContext) {
+      appContext.restProps=Object.entries(props).length > 0 ? props : {bPAr:''}
+    }
+  } catch (error) {
     if(isDevelopment){
       console.log(error.message,'this is from component',error.stack)
     }
@@ -199,13 +212,11 @@ setServer({
   $state,
   accessChild,
   useServer,
-  useAsync
+  useAsync,
+  forwardProps
 })
 export const pawaForServer=setServer
-const components = new Map();
-export const getPawaComponentsMap =()=>{
-  return components ;
-}
+
  const getStore=()=>{
   return store.getStore()
 }
@@ -221,21 +232,16 @@ export const getAllServerAttrArray=()=>{
   return allServerAttr;
 }
 
-const compoBeforeCall = new Set()
-const compoAfterCall=new Set()
-const renderBeforePawa=new Set()
-const renderAfterPawa=new Set()
-const renderBeforeChild=new Set()
-const startsWithSet=new Set()
-const fullNamePlugin=new Set()
-const externalPlugin={}
-const pawaAttributes=new Set()
+const {compoAfterCall,compoBeforeCall,externalPlugin,
+  fullNamePlugin,renderAfterPawa,renderBeforeChild,
+  renderBeforePawa,startsWithSet,pawaAttributes
+}=pluginsMap()
 const setPawaAttribute=(...attr)=>{
   attr.forEach(att=>{
     pawaAttributes.add(att)
   })
 }
-setPawaAttribute('if','else','else-if','for-each','ref','key')
+setPawaAttribute('if','else','else-if','for-each','case','switch','s-default','for-key','key')
 export const getPawaAttributes=()=>pawaAttributes
 /**
  * @typedef {{startsWith:string,fullName:string,plugin:(el:HTMLElement | PawaElement,attr:object)=>void}} AttriPlugin
@@ -352,6 +358,7 @@ const component=async (el,stream)=>{
     let appContext={
       transportContext: {},
       innerContext:el._context,
+      restProps:{},
       mount:[],
       formerContext:oldAppContext,
       name:el._componentName,
@@ -379,13 +386,7 @@ const component=async (el,stream)=>{
       }
     }) 
     const children=el._componentChildren
-    const hydrate={
-      children:children,
-      props:{
-        ...el._hydrateProps,
-      },
-      slots:{...slotHydrates},
-    }
+    
     
     const id=pawaGenerateId(10)
     const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g, '-');
@@ -454,13 +455,57 @@ appContext.component._prop={children,...el._props,...slots}
           if (appContext?.insert){
       Object.assign(el._context,appContext.insert)
     }
-     
+    const hydrate={
+      children:children,
+      props:{
+        ...el._hydrateProps,
+      },
+      slots:{...slotHydrates},
+    } 
     if(typeof compo !== 'boolean' && typeof compo === 'string'){
       div.innerHTML=compo
       }
+        const restProps={}
+        if (Object.entries(appContext.restProps).length > 0) {
+          const props=el._restProps
+          if (appContext.restProps['className'] && props['class']) {
+            restProps['class']={...props['class']}
+          }
+          if (appContext.restProps['defaultValue'] && props['default']) {
+            restProps['default']={...props['default']}
+          }
+      for (const key in props) {
+        let name=key
+        name=name.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+        if (appContext.restProps[name]) {
+          restProps[key]={...props[key]}
+        }
+      }
+    }else{
+      Object.assign(restProps,el._restProps)
+    }
+         const getAsChild=()=>{
+      const asChild=div.firstElementChild
+      if (splitAndAdd(asChild?.tagName|| '') === 'ASCHILD') {
+        const getChildren=asChild.firstElementChild
+        if (getChildren === null) return
+        Array.from(asChild.attributes).forEach(attr=>{
+          if (getChildren.hasAttribute(attr.name)) {
+            let attrName=getChildren.getAttribute(attr.name)
+            attrName=attr.value +' '+attrName
+            getChildren.setAttribute(attr.name, attrName)
+          }else{
+            getChildren.setAttribute(attr.name, attr.value)
+          }
+        })
+        asChild.remove()
+        div.appendChild(getChildren)        
+      }
+    }       
+    getAsChild()
           const findElement=div.querySelector('[--]') || div.querySelector('[r-]')
           if (findElement) {
-            for (const [key,value] of Object.entries(el?._restProps)) {
+            for (const [key,value] of Object.entries(restProps)) {
                 findElement.setAttribute(value.name,value.value)
               }
               findElement.removeAttribute('--')
@@ -468,12 +513,12 @@ appContext.component._prop={children,...el._props,...slots}
         }
         
         // Handle multiple root nodes (Fragments)
-        const newElements = Array.from(div.children)
+        const newElements = div.firstElementChild
         for (const fn of compoAfterCall) {
           try {
             // Note: passing the first child might be limiting if there are multiple, 
             // but keeping API consistent for now.
-            await fn(appContext, newElements[0], el)
+            await fn(appContext, newElements, el)
           } catch (error) {
             console.error(error.message,error.stack)
           }
@@ -496,20 +541,19 @@ appContext.component._prop={children,...el._props,...slots}
           
           comment.data=`component+${id}+${el._componentName}+${encodeJSON(hydrate)}`
         
-        for (const newElement of newElements) {
-          comment.parentElement.insertBefore(newElement, endComment)
+          comment.parentElement.insertBefore(newElements, endComment)
       
-            newElement.setAttribute('p:c', el.getAttribute('p:c'))
+            newElements.setAttribute('p:c', el.getAttribute('p:c'))
           Array.from(el.attributes).forEach((value) => {
             if (value.name.startsWith('c-')) {
-              newElement.setAttribute(value.name, value.value)
+              newElements.setAttribute(value.name, value.value)
             }
           })
           
-          newElement.setAttribute(`c-c-${el._componentName}-${id}`, id)
-            await render(newElement, el._context,stream)
+          newElements.setAttribute(`c-c-${el._componentName}-${id}`, id)
+            await render(newElements, el._context,stream)
           
-        }              
+                   
         store.getStore().stateContext=appContext.formerContext
          } catch (error) {
     console.log(error.message,error.stack);
@@ -544,6 +588,7 @@ const streamingComponent=async (el,stream)=>{
       transportContext: {},
       innerContext:el._context,
       mount:[],
+      restProps:{},
       formerContext:oldAppContext,
       name:el._componentName,
       insert:{},
@@ -570,13 +615,6 @@ const streamingComponent=async (el,stream)=>{
       }
     }) 
     const children=el._componentChildren
-    const hydrate={
-      children:children,
-      props:{
-        ...el._hydrateProps,
-      },
-      slots:{...slotHydrates},
-    }
     
     const id=pawaGenerateId(10)
     const encodeJSON = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g, '-');
@@ -650,6 +688,51 @@ appContext.component._prop={children,...el._props,...slots}
           if (appContext?.insert){
       Object.assign(el._context,appContext.insert)
     }
+    const hydrate={
+      children:children,
+      props:{
+        ...el._hydrateProps,
+      },
+      slots:{...slotHydrates},
+    }
+    const restProps={}
+        if (Object.entries(appContext.restProps).length > 0) {
+          const props=el._restProps
+
+          if (appContext.restProps['className'] && props['class']) {
+            restProps['class']={...props['class']}
+          }
+          if (appContext.restProps['defaultValue'] && props['default']) {
+            restProps['default']={...props['default']}
+          }
+      for (const key in props) {
+        let name=key
+        name=name.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+        if (appContext.restProps[name]) {
+          restProps[key]={...props[key]}
+        }
+      }
+    }else{
+      Object.assign(restProps,el._restProps)
+    }
+    const getAsChild=(divs)=>{
+      const asChild=divs.firstElementChild
+      if (splitAndAdd(asChild?.tagName|| '') === 'ASCHILD') {
+        const getChildren=asChild.firstElementChild
+        if (getChildren === null) return
+        Array.from(asChild.attributes).forEach(attr=>{
+          if (getChildren.hasAttribute(attr.name)) {
+            let attrName=getChildren.getAttribute(attr.name)
+            attrName=attr.value +' '+attrName
+            getChildren.setAttribute(attr.name, attrName)
+          }else{
+            getChildren.setAttribute(attr.name, attr.value)
+          }
+        })
+        asChild.remove()
+        divs.appendChild(getChildren)        
+      }
+    }   
     if (isBoundary) {
       store.getStore().batch.push({
         component:compo,
@@ -661,8 +744,9 @@ appContext.component._prop={children,...el._props,...slots}
         },
         appContext:appContext,
         context:{...el._context},
-        restProps:el._restProps,
-        hydrate:hydrate
+        restProps:restProps,
+        hydrate:hydrate,
+        getAsChild:getAsChild
       })
       
     }
@@ -671,10 +755,12 @@ appContext.component._prop={children,...el._props,...slots}
     }
     if(typeof compo !== 'boolean' && typeof compo === 'string'){
       div.innerHTML=compo
-      }
+      }   
+            
+    getAsChild(div)
           const findElement=div.querySelector('[--]') || div.querySelector('[r-]')
           if (findElement) {
-            for (const [key,value] of Object.entries(el?._restProps)) {
+            for (const [key,value] of Object.entries(restProps)) {
                 findElement.setAttribute(value.name,value.value)
               }
               findElement.removeAttribute('--')
@@ -682,12 +768,12 @@ appContext.component._prop={children,...el._props,...slots}
         }
         
         // Handle multiple root nodes (Fragments)
-        const newElements = Array.from(div.children)
+        const newElements = div.firstElementChild
         for (const fn of compoAfterCall) {
           try {
             // Note: passing the first child might be limiting if there are multiple, 
             // but keeping API consistent for now.
-            await fn(appContext, newElements[0], el)
+            await fn(appContext, newElements, el)
           } catch (error) {
             console.error(error.message,error.stack)
           }
@@ -711,26 +797,26 @@ appContext.component._prop={children,...el._props,...slots}
           comment.data=`component+${id}+${el._componentName}+${encodeJSON(hydrate)}`
           stream(`<!--${comment.data}-->`)
         
-        for (const newElement of newElements) {
-          comment.parentElement.insertBefore(newElement, endComment)
+        
+          comment.parentElement.insertBefore(newElements, endComment)
           if (!isBoundary) {
-            newElement.setAttribute('p:c', el.getAttribute('p:c'))
+            newElements.setAttribute('p:c', el.getAttribute('p:c'))
           }else{
-            newElement.setAttribute('p:c',el.getAttribute('p:c'))
-            newElement.setAttribute('p-async', el.getAttribute('p:c'))
+            newElements.setAttribute('p:c',el.getAttribute('p:c'))
+            newElements.setAttribute('p-async', el.getAttribute('p:c'))
           }
           Array.from(el.attributes).forEach((value) => {
             if (value.name.startsWith('c-')) {
-              newElement.setAttribute(value.name, value.value)
+              newElements.setAttribute(value.name, value.value)
             }
           })
           
-          newElement.setAttribute(`c-c-${el._componentName}-${id}`, id)
+          newElements.setAttribute(`c-c-${el._componentName}-${id}`, id)
           
           
-            await render(newElement, el._context,stream)
+            await render(newElements, el._context,stream)
           
-        }
+        
         stream(`<!--${endComment.data}-->`)
         
         appContext.mount.forEach(async(call)=>{
@@ -788,8 +874,9 @@ const textContentHandler = async(el) => {
   const nodesMap = new Map();
   const currentHtmlString = el.outerHTML;
   el.setAttribute('c-t',true)
+  const newString=el.innerHTML.replace('-','(//)')
   const document = el.ownerDocument
-  const comment=document.createComment(`textEvaluator-${el.innerHTML}`)
+  const comment=document.createComment(`textEvaluator-${newString}`)
   el.appendChild(comment)
   // Get all text nodes and store their original content
   const textNodes = Array.from(el.childNodes).filter(node => node.nodeType === 3);
@@ -841,6 +928,9 @@ const attributeHandler =async (el, attr) => {
   if (el._running) {
     return;
   }
+  if (el._componentName) {
+    return
+  }
   el._replaceResumeAttr(attr.name,`c-at-${attr.name}`,attr.value)
   const currentHtmlString = el.outerHTML;
   const removableAttributes = new Set();
@@ -887,14 +977,14 @@ const attributeHandler =async (el, attr) => {
   const setSingle=(...string)=>{
     string.forEach(v => singleElement.add(v))
   }
-  setSingle('img','br')
+  setSingle('img', 'br', 'hr', 'input', 'meta', 'link', 'base', 'col', 'area', 'param', 'track', 'wbr');
   const partlyPawajsDirective=new Set()
   export const addToPartlyDirective=(...partly)=>{
     partly.forEach((v)=>{
       partlyPawajsDirective.add(v)
     })
   }
-  addToPartlyDirective('else','else-if','case')
+  addToPartlyDirective('else','else-if','case','s-default')
   const checkIfRemove=(el)=>{
     for (const v of partlyPawajsDirective) {
       if(el.hasAttribute(v)) return true
@@ -919,11 +1009,18 @@ export const render =async (el, contexts = {},stream) => {
     el.replaceWith(comment)
     template.appendChild(el)
     comment.replaceWith(template)
+    if (isStream) {
+      stream(template.outerHTML)
+    }
     return
   }
   if (el.tagName === 'HEAD') {
     if (el.querySelector('title')) {
       el.ownerDocument.head.querySelector('title')?.remove()
+      if (isStream) {
+        stream(`<script>document.title='${el.querySelector('title').textContent || ''}'</script>`)
+      }
+      return
     }
     Array.from(el.children).forEach(child => {
       el.ownerDocument.head.appendChild(child)
@@ -942,7 +1039,7 @@ export const render =async (el, contexts = {},stream) => {
         console.error(error.message,error.stack)
       }
     }
-    
+    const stateContext=store.getStore().stateContext
     PawaElement.Element(el,context)
      if(el.childNodes.some(node=>node.nodeType === 3 && node.nodeValue.includes('@{')) && !el._avoidPawaRender){
        await textContentHandler(el)  
@@ -968,13 +1065,14 @@ export const render =async (el, contexts = {},stream) => {
         console.error(error.message,error.stack)
       }
     }
+    const isAcomponent=el._componentName?true:false
     if (!el._avoidPawaRender) {
       
       const attributes = Array.from(el.attributes);
       for(const attr of attributes){
         if (directives[attr.name]) {
           await directives[attr.name](el,attr,stream)  
-        }else if(attr.value.includes('@{')){
+        }else if(attr.value.includes('@{') && !isAcomponent){
           await  attributeHandler(el,attr)
         }else if (attr.name.startsWith('state-')) {
           directives['state-'](el,attr)
@@ -987,7 +1085,7 @@ export const render =async (el, contexts = {},stream) => {
                 console.warn(`${attr.name} plugin must be a function`)
                 return
               }
-             await plugin(el,attr)
+             await plugin(el,attr,stateContext,stream)// on client no stream but an object called notRender
             }catch(error){
               console.warn(error.message,error.stack)
             }
@@ -1001,7 +1099,7 @@ export const render =async (el, contexts = {},stream) => {
                 console.warn(`${name} plugin must be a function`)
                 return
               }
-              await plugin(el,attr)
+              await plugin(el,attr,stateContext,stream)
             }catch(error){
               console.warn(error.message,error.stack)
             }
@@ -1015,6 +1113,23 @@ export const render =async (el, contexts = {},stream) => {
         return
       }
       if (el._componentName) {
+        // console.log(el._lazy , lazyComponents.has(el.tagName),components.has(el.tagName));
+        if(el._lazy && lazyComponents.has(splitAndAdd(el.tagName)) && !components.has(splitAndAdd(el.tagName))){
+          try {
+            const lazyComponent=lazyComponents.get(splitAndAdd(el.tagName))
+          const {name,component} =lazyComponent
+          const compo=await component()
+          if(compo[name]){
+            
+            components.set(name.toUpperCase(),compo[name])
+            el._component.component=compo[name]
+            el._component.validPropRule=compo[name]?.validateProps || {};
+            lazyComponents.delete(name.toUpperCase())
+          }
+          } catch (error) {
+           throw new Error(`lazy component ${el.tagName} : Error from the component - ${error.message}`,error.message) 
+          }
+        }
         if(isStream){
           await streamingComponent(el,stream)
           return
@@ -1033,27 +1148,28 @@ export const render =async (el, contexts = {},stream) => {
       }
     }
 if(!el._running){
-  const attr=Array.from(el.attributes).map(att=>`${att.name}="${att.value}"`).join(' ')
+  const attr = Array.from(el.attributes)
+    .map(att => `${att.name}="${escapeHtml(att.value)}"`)
+    .join(' ');
+  const attrStr = attr ? ` ${attr}` : '';
   const isSingle=singleElement.has(el.tagName.toLowerCase())
-  if (isSingle) {
-    stream(`<${el.tagName.toLowerCase()} ${attr} />`)
-  }else{
-    stream(`<${el.tagName.toLowerCase()} ${attr} >`)
-  }
+  const tagName = el.tagName.toLowerCase();
+
+  stream(`<${tagName}${attrStr}${isSingle ? ' />' : '>'}`);
+
+  if (!isSingle) {
    const children = el.childNodes;
    for(const child of children){
     if (child.nodeType === 3) {
-      stream(child.nodeValue)
+      stream(escapeHtml(child.nodeValue)) // Correct: linkedom decodes entities, so we must re-encode
     }else if (child.nodeType === 8) {
       stream(`<!--${child.nodeValue}-->`)
     }else if (child.nodeType === 1){
       await render(child, el._context,stream);
     }
    };
-   if (!isSingle) {
-    stream(`</${el.tagName.toLowerCase()}>`)
-   }
-  
+    stream(`</${tagName}>`)
+  }
 }
 
     el._setError()
@@ -1188,9 +1304,9 @@ export const startStreamApp = async (html, context = {},stream,{templateStart,te
       `).join('')}
     </div>
     ` : ''
-    __pawaDev.errors=[]
     stream(errorHtml)
-  stream(templateEnd)
+    stream(templateEnd)
+    __pawaDev.errors=[]
 };
 
 const resolvesAsync=async({component,
@@ -1199,12 +1315,12 @@ const resolvesAsync=async({component,
           encodeJSON,
           name
         },
-        appContext,context,restProps,hydrate},root,stream,index)=>{
+        appContext,context,restProps,hydrate,getAsChild},root,stream,index)=>{
           let chunk=''
           const bufferStream=(string)=>{
             chunk+=string
           }
-          bufferStream(`<div id="p${id}" hidden>`)
+          bufferStream(`<div id="res-${id}" hidden>`)
       store.getStore().stateContext=appContext
       const compo=await component.then((res)=>res)
       const div=root.createElement('div')
@@ -1212,6 +1328,7 @@ const resolvesAsync=async({component,
       if(typeof compo !== 'boolean' && compo){
       div.innerHTML=compo
       }
+        getAsChild(div)
           const findElement=div.querySelector('[--]') || div.querySelector('[r-]')
           if (findElement) {
             for (const [key,value] of Object.entries(restProps)) {
@@ -1243,36 +1360,31 @@ const resolvesAsync=async({component,
         bufferStream(`
           <script class="p${id}">
             const s${id}=()=>{
-              let p=document.querySelectorAll("#p${id}")
-              if(p.length < 2){
-                if(p[0]) p[0].remove()
-                document.querySelector('.p${id}').remove()
-                return
-              }
-            let c=p[0].previousSibling
-            c.data='${commentData}'
-            p[0].remove()
-            const sc=p[0]?._stateContext
-            let ec=c.nextSibling
-            let fc=p[1].firstElementChild
-            p[0].removeAttribute('pawa-avoid')
-            Array.from(p[0].attributes).forEach(a => {
-              if(a.name === 'p-async') return
-              if (a.name === 'p:c') {
-                let o=a.value + (fc.getAttribute('p:c') || '')
-                fc.setAttribute('p:c',o)
-              }else{
-                fc.setAttribute(a.name,a.value)
+              const placeholder = document.getElementById("p${id}");
+              const resolved = document.getElementById("res-${id}");
+              if(!placeholder || !resolved) return;
+              
+              const comment = placeholder.previousSibling;
+              if(comment && comment.nodeType === 8) comment.data = '${commentData}';
+              
+              const firstChild = resolved.firstElementChild;
+              Array.from(placeholder.attributes).forEach(a => {
+                if(a.name === 'p-async') return;
+                if (a.name === 'p:c') {
+                  firstChild.setAttribute('p:c', a.value + (firstChild.getAttribute('p:c') || ''));
+                } else {
+                  firstChild.setAttribute(a.name, a.value);
                 }
-            });
-            p[1].childNodes.forEach(e => {
-              c.parentElement.insertBefore(e,ec)
-            });
-            if (window?.__pawaDev) {
-              window.__pawaStream(fc,p[0]._context,sc)
-            }
-            p[1].remove()
+              });
+
+              while(resolved.firstChild) placeholder.parentNode.insertBefore(resolved.firstChild, placeholder);
+              placeholder.remove();
+              resolved.remove();
+
+              if (window?.__pawaDev) {
+                window.__pawaStream(firstChild, {}, {});
               }
+            }
             s${id}()
             document.querySelector('.p${id}').remove()
           </script>

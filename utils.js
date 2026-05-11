@@ -156,7 +156,26 @@ export const propsValidator=(obj={},propsAttri,name,template,el)=>{
       if(propsAttri[key] || propsAttri[key] === 0){
         const checker=ComponentProps(propsAttri[key],value?.err,name)
         if (value.type) {
-        checker[value.type.name]()
+          if (Array.isArray(value.type)) {
+            let isValid = false
+            for (const type of value.type) {
+              try {
+                checker[type.name]()
+                isValid = true
+                break
+              } catch (error) {}
+            }
+            if (!isValid) {
+              const types = value.type.map(t => t.name).join(' or ')
+              throw new Error(value?.err ? value.err : `${key} must be type of ${types} at ${name} component`);
+            }
+          } else {
+            try {
+              checker[value.type.name]()
+            } catch (error) {
+              throw new Error(value?.err ? value.err : `${key} must be type of ${value.type.name} at ${name} component`);
+            }
+          }
         }
       }else{
         if (value.strict) {
@@ -187,7 +206,12 @@ export const convertToNumber=(str)=>{
   return hash
 };
 export const ComponentProps=(somes,message,name)=>{
-let some=somes?.() || somes
+let some
+if (typeof somes === 'function') {
+    some=somes()
+  }else{
+    some=somes
+  }
     return({
     Array:()=>{
 
@@ -246,3 +270,12 @@ export const replaceTemplateOperators = (expression) => {
     .replace(/\*\//g, '`'); // Also replace closing */ with backtick if needed
 };
 
+export const escapeHtml = (unsafe) => {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
