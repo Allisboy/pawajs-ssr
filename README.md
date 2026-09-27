@@ -1,8 +1,8 @@
-﻿# pawa-ssr
+﻿# pawajs/ssr
 
 **Server-side rendering for PawaJS — with continuity, not hydration.**
 
-`pawa-ssr` renders PawaJS markup on the server and produces two things: real, fully-resolved HTML, and a small JSON payload describing exactly what's reactive on the page. The browser hands both to [`pawajs-continue`](https://github.com/Allisboy/pawajs-continue), which **resumes** the page — attaching live reactivity to the DOM that's already there — instead of re-rendering and reconciling it from scratch the way traditional hydration does.
+`pawajs/ssr` renders PawaJS markup on the server and produces two things: real, fully-resolved HTML, and a small JSON payload describing exactly what's reactive on the page. The browser hands both to [`pawajs/continue`](https://github.com/Allisboy/pawajs-continue), which **resumes** the page — attaching live reactivity to the DOM that's already there — instead of re-rendering and reconciling it from scratch the way traditional hydration does.
 
 Together, this HTML + JSON contract is called **SCP** (Server Continuation Protocol). It's deliberately simple: plain HTML attributes marking structural boundaries, and a flat, id-keyed JSON object carrying only the state a construct actually needs to resume. No serialized closures, no framework-specific payload format — any backend language could, in principle, produce SCP-compliant output.
 
@@ -12,7 +12,7 @@ Together, this HTML + JSON contract is called **SCP** (Server Continuation Proto
 
 Most SSR frameworks ship a payload sized to the whole component tree, then re-run the client-side render and diff it against what the server sent — real, recurring cost, whether or not a given piece of the page is actually interactive.
 
-`pawa-ssr` asks a narrower question for every piece of the page: **did this actually touch reactive state?** If a component, expression, or prop never reads from a `$state` proxy, it contributes **nothing** to the JSON — no matter how large or deeply nested it is. A dashboard with dozens of components and a handful of genuinely reactive widgets produces a payload sized to those widgets, not to the dashboard.
+`pawajs/ssr` asks a narrower question for every piece of the page: **did this actually touch reactive state?** If a component, expression, or prop never reads from a `$state` proxy, it contributes **nothing** to the JSON — no matter how large or deeply nested it is. A dashboard with dozens of components and a handful of genuinely reactive widgets produces a payload sized to those widgets, not to the dashboard.
 
 What the client does with that payload is equally narrow: no re-render, no diffing pass. Each construct is looked up once by id and either seeded with server-resolved state (a resolved condition branch, a resolved promise, a component's props) or, for the rare cases that must re-run (a component re-executing to rebuild its own effects), attached directly to the existing element rather than replacing it.
 
@@ -21,7 +21,7 @@ What the client does with that payload is equally narrow: no re-render, no diffi
 ## Install
 
 ```bash
-npm install pawa-ssr pawajs pawajs-continue
+npm install @pawajs/ssr pawajs @pawajs/continue
 ```
 
 `pawajs` is a peer dependency — register the exact same components on the server and in the client bundle, or SCP has nothing consistent to resume.
@@ -34,7 +34,7 @@ npm install pawa-ssr pawajs pawajs-continue
 
 ```js
 import { RegisterComponent } from 'pawajs';
-import { pawaServer } from 'pawa-ssr';
+import { pawaServer } from '@pawajs/ssr';
 import { App } from './App.js';
 
 RegisterComponent(App);
@@ -72,7 +72,7 @@ Escaping `<` inside the serialized JSON keeps it from being misread as markup by
 
 ```js
 import { RegisterComponent } from 'pawajs';
-import { PawaContinue } from 'pawajs-continue';
+import { PawaContinue } from '@pawajs/continue';
 import { App } from './App.js';
 
 RegisterComponent(App); // same components, same names
@@ -89,7 +89,7 @@ if (node?.textContent) {
 
 ## Streaming
 
-For pages with slow-resolving `await`s, `pawa-ssr` can stream: the initial response ships immediately with placeholder content for whatever hasn't resolved yet, and each pending piece streams in — independently, as it settles — without blocking on the slowest one.
+For pages with slow-resolving `await`s, `pawajs/ssr` can stream: the initial response ships immediately with placeholder content for whatever hasn't resolved yet, and each pending piece streams in — independently, as it settles — without blocking on the slowest one.
 
 ```js
 const session = pawaServer('<app></app>', { url: '/' }, true /* stream */);
@@ -117,13 +117,13 @@ The server never evaluates it; it's emitted as an inert `<template>` for the cli
 
 ## When detection can't see it
 
-`pawa-ssr` detects reactivity by watching for state reads during server evaluation — but calling a function during SSR never runs its body, so a function passed as a prop or event handler (something that reads state only once it's actually invoked, client-side) is invisible to that detection. Mark the usage site with `force` when you know a component needs client status for this reason:
+`pawajs/ssr` detects reactivity by watching for state reads during server evaluation — but calling a function during SSR never runs its body, so a function passed as a prop or event handler (something that reads state only once it's actually invoked, client-side) is invisible to that detection. Mark the usage site with `force` when you know a component needs client status for this reason or set `MyWidget.client=true` set the Component funtion with a property .client=true:
 
 ```html
 <my-widget :on-select="handleSelect" force></my-widget>
 ```
 
-You only need `force` at the boundary where this is genuinely invisible to detection — components nested inside an already-client region don't need it repeated for every function-valued prop passed further down.
+You only need `force` at the boundary where this is genuinely invisible to detection — This helps when a component cmponent can update or provide context for a reactive client component .
 
 ## Development warnings
 
@@ -177,7 +177,7 @@ Read or set the module-level development flag directly, outside of a `pawaServer
 
 ## What the renderer understands
 
-`pawa-ssr` parses the given HTML with [LinkeDOM](https://github.com/WebReflection/linkedom) and evaluates it the same way the client does: `if` / `else-if` / `else`, `for-each` / `for-key`, `state-*`, `template`, `await` / `as-fallback` / `as-catch`, registered components, and `@{ }` text/attribute expressions. `$state`, `useInsert`, `setContext`, and `useContext` are all connected to their server-side implementations automatically once `pawa-ssr` is loaded — no separate setup needed in your component code.
+`pawajs/ssr` parses the given HTML with [LinkeDOM](https://github.com/WebReflection/linkedom) and evaluates it the same way the client does: `if` / `else-if` / `else`, `for-each` / `for-key`, `state-*`, `template`, `await` / `as-fallback` / `as-catch`, registered components, and `@{ }` text/attribute expressions. `$state`, `useInsert`, `setContext`, and `useContext` are all connected to their server-side implementations automatically once `pawa-ssr` is loaded — no separate setup needed in your component code.
 
 ---
 
